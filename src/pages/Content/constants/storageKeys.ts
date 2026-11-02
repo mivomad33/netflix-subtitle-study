@@ -1,0 +1,18 @@
+export const STORAGE_KEYS = {
+  IS_PANEL_VISIBLE: 'NF_isPanelVisible',
+  IS_OVERLAY_VISIBLE: 'NF_isOverlayVisible',
+  IS_ENGLISH_VISIBLE: 'NF_isEnglishVisible',
+  IS_KOREAN_VISIBLE: 'NF_isKoreanVisible',
+  IS_AUTO_PAUSE: 'NF_isAutoPause',
+  IS_PAGE_END_PAUSE: 'NF_isPageEndPause',
+  IS_AUTO_SKIP: 'NF_isAutoSkip',
+  IS_SMART_SKIM: 'NF_isSmartSkim',
+  IS_SENTENCE_LOOP: 'NF_isSentenceLoop',
+  FONT_SIZE: 'NF_fontSize',
+  ITEMS_PER_PAGE_PREFIX: 'NF_itemsPerPage_',
+  CHECKLIST_PREFIX: 'NF_checklist_',
+  STUDIED_VIDEOS: 'NF_studied_videos',
+  STUDY_PANEL_WIDTH_RATIO: 'NF_studyPanelWidthRatio',
+  LINGO_ACTIVE: 'NF_lingoActive',
+  PREFERRED_TEXT_LOCALE: 'NF_preferredTextLocale',
+} as const;
