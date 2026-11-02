@@ -11,3 +11,4 @@ alwaysApply: true
 - background script는 src/pages/Background/index.ts 파일이 엔트리다
 - content script에서 src/pages/Content/index.jsx 를 엔트리로 하는 js파일을 넷플릭스에 삽입하여 실행시킨다
 - src/pages/Content 영역에서 api를 호출할 때는 넷플릭스의 CSP에 걸리므로, content script, background script를 거쳐서 호출한다
+- README나 DEVELOPMENT 문서를 고치면 두 언어 파일을 함께 고친다
