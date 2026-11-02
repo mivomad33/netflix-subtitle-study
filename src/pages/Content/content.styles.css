@@ -1,0 +1,10 @@
+#studyPanel {
+    height: 100%;
+    background-color: #FAEBD7;
+}
+
+#divider {
+    width: 5px;
+    background-color: #ccc;
+    cursor: col-resize;
+}
