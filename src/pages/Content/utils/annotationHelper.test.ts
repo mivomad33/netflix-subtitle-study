@@ -1,19 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { SentenceAnnotation } from '../../../types';
+import { describe, it, expect } from 'vitest';
+import { Memo } from '../../../shared/memo/types';
+import { getAnnotationsForSentence } from './annotationHelper';
 import {
   buildSegments,
-  getAnnotationsForSentence,
   getRangeOffsetsWithin,
-  loadAnnotations,
   rangesOverlap,
-  saveAnnotations,
   trimRange,
-} from './annotationHelper';
+} from '../../../shared/memo/annotate';
 
-const make = (overrides: Partial<SentenceAnnotation> = {}): SentenceAnnotation => ({
+const make = (overrides: Partial<Memo> = {}): Memo => ({
   id: 'a',
+  kind: 'netflix',
+  sourceId: 'v1',
   sentenceStartMs: 1000,
-  sentenceText: 'I am on it.',
+  contextText: 'I am on it.',
   start: 5,
   end: 10,
   quote: 'on it',
@@ -24,28 +24,12 @@ const make = (overrides: Partial<SentenceAnnotation> = {}): SentenceAnnotation =
 });
 
 describe('annotationHelper', () => {
-  beforeEach(() => localStorage.clear());
-
-  it('saves and loads annotations per video, removing the key when empty', () => {
-    saveAnnotations('v1', [make()]);
-    expect(loadAnnotations('v1')).toEqual([make()]);
-    expect(loadAnnotations('v2')).toEqual([]);
-
-    saveAnnotations('v1', []);
-    expect(localStorage.getItem('NF_annotations_v1')).toBeNull();
-  });
-
-  it('returns an empty list for broken stored data', () => {
-    localStorage.setItem('NF_annotations_v1', '{not json');
-    expect(loadAnnotations('v1')).toEqual([]);
-  });
-
   it('matches annotations by sentence text and nearby start time', () => {
     const sentence = { startTime_ms: 1500, text: 'I am on it.' };
     const list = [
       make({ id: 'ok' }),
       make({ id: 'far', sentenceStartMs: 5000 }),
-      make({ id: 'text', sentenceText: 'I am in it.' }),
+      make({ id: 'text', contextText: 'I am in it.' }),
       make({ id: 'quote', quote: 'in it' }),
     ];
     expect(getAnnotationsForSentence(list, sentence).map((a) => a.id)).toEqual(['ok']);
@@ -68,7 +52,7 @@ describe('annotationHelper', () => {
       make({ id: 'c', start: 7, end: 9 }), // 겹치면 앞의 것만 쓴다
       make({ id: 'a', start: 0, end: 1 }),
     ]);
-    expect(segments.map((s) => [s.text, s.annotation?.id])).toEqual([
+    expect(segments.map((s) => [s.text, s.memo?.id])).toEqual([
       ['I', 'a'],
       [' am ', undefined],
       ['on it', 'b'],

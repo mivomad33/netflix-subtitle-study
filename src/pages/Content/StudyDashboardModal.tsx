@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './StudyDashboardModal.css';
 import { STORAGE_KEYS } from './constants/storageKeys';
 import { migrateChecklists } from './utils/checklistMigrator';
+import { getStoreClient } from './utils/storeClient';
+import { ExtensionPage } from '../../shared/bridge/protocol';
 
 interface StudiedVideo {
   videoId: string;
@@ -67,6 +69,13 @@ const StudyDashboardModal: React.FC<StudyDashboardModalProps> = ({ onClose }) =>
     }
   }, []);
 
+  // 확장 프로그램 화면은 넷플릭스 페이지에서 바로 열 수 없어 content script에 부탁한다.
+  const openExtensionPage = (page: ExtensionPage) => {
+    getStoreClient()
+      .call({ op: 'page.open', page })
+      .catch((e) => console.error('[NF-STUDY] Failed to open page:', e));
+  };
+
   const handleDeleteVideo = (videoId: string, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -102,6 +111,14 @@ const StudyDashboardModal: React.FC<StudyDashboardModalProps> = ({ onClose }) =>
       <div className="dashboard-content" onClick={(e) => e.stopPropagation()}>
         <div className="dashboard-header">
           <h2>📊 나의 학습 대시보드</h2>
+          <div className="dashboard-links">
+            <button type="button" className="dashboard-link-btn" onClick={() => openExtensionPage('memos')}>
+              메모 모아 보기
+            </button>
+            <button type="button" className="dashboard-link-btn" onClick={() => openExtensionPage('reader')}>
+              원서 리더
+            </button>
+          </div>
           <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
 

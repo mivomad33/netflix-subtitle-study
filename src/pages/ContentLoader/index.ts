@@ -1,4 +1,12 @@
+import { createChromeArea } from '../../shared/storage/storageArea';
+import { installStoreBridge, OPEN_PAGE_MESSAGE } from './storeBridge';
+
 console.log('[NF-STUDY] ContentLoader (index.ts) initialized. Injecting contentScript.bundle.js...');
+
+// 공통 저장소(chrome.storage.local)와 넷플릭스 페이지 코드를 잇는다. 페이지 코드보다 먼저 듣기 시작한다.
+installStoreBridge(window, createChromeArea(), (page) => {
+  chrome.runtime.sendMessage({ type: OPEN_PAGE_MESSAGE, page });
+});
 
 const script = document.createElement('script');
 script.src = chrome.runtime.getURL('contentScript.bundle.js');

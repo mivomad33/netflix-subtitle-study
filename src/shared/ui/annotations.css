@@ -1,0 +1,167 @@
+:root {
+  /* 디자인 기준 docs/design.md의 하이라이트·메모 색 */
+  --nfs-highlight: #fff0a8;
+  --nfs-highlight-hover: #ffe066;
+  --nfs-highlight-editing: #ffd43b;
+  --nfs-note: #d97706;
+  --nfs-note-strong: #b45309;
+  --nfs-note-bg: #fffbea;
+  --nfs-note-border: #f5d77a;
+  --nfs-note-input-border: #e5c76b;
+  --nfs-note-quote: #92400e;
+  --nfs-note-hint: #8a6d1f;
+  --nfs-floating-bg: #1f2937;
+  --nfs-danger: #b91c1c;
+  --nfs-danger-border: #fca5a5;
+  --nfs-danger-bg: #fef2f2;
+}
+
+/* 하이라이트·메모 (넷플릭스 학습 패널과 원서 리더 공용) */
+.highlighted-word {
+  color: inherit;
+  background-color: var(--nfs-highlight);
+  border-radius: 2px;
+  padding: 0 1px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.highlighted-word:hover {
+  background-color: var(--nfs-highlight-hover);
+}
+
+.highlighted-word.has-note {
+  border-bottom-color: var(--nfs-note);
+}
+
+.highlighted-word.has-note::after {
+  content: '✎';
+  font-size: 0.65em;
+  color: var(--nfs-note-strong);
+  margin-left: 2px;
+  vertical-align: super;
+  user-select: none;
+}
+
+.highlighted-word.editing {
+  background-color: var(--nfs-highlight-editing);
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.35);
+}
+
+.annotation-toolbar {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--nfs-floating-bg);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  user-select: none;
+}
+
+.annotation-toolbar-btn {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.annotation-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.annotation-editor {
+  flex-basis: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--nfs-note-bg);
+  border: 1px solid var(--nfs-note-border);
+  border-radius: 8px;
+}
+
+.annotation-editor-quote {
+  font-size: calc(var(--base-font-size, 14pt) * 0.9);
+  font-weight: 600;
+  color: var(--nfs-note-quote);
+  border-left: 3px solid var(--nfs-note);
+  padding-left: 8px;
+  word-break: break-word;
+}
+
+.annotation-editor-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 9em;
+  max-height: 60vh;
+  padding: 10px;
+  font-family: inherit;
+  font-size: calc(var(--base-font-size, 14pt) * 0.85);
+  line-height: 1.5;
+  color: #111;
+  background: #fff;
+  border: 1px solid var(--nfs-note-input-border);
+  border-radius: 6px;
+  resize: vertical;
+  overflow-y: auto;
+}
+
+.annotation-editor-textarea:focus {
+  outline: none;
+  border-color: var(--nfs-note);
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.2);
+}
+
+.annotation-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.annotation-editor-hint {
+  font-size: 12px;
+  color: var(--nfs-note-hint);
+}
+
+.annotation-editor-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.annotation-btn {
+  font-size: 13px;
+  padding: 5px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.annotation-btn:hover {
+  background: #f3f4f6;
+}
+
+.annotation-btn-danger {
+  color: var(--nfs-danger);
+  border-color: var(--nfs-danger-border);
+}
+
+.annotation-btn-danger:hover {
+  background: var(--nfs-danger-bg);
+}
+
+.annotation-editor-error {
+  font-size: 12px;
+  color: var(--nfs-danger);
+}

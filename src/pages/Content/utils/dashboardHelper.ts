@@ -3,6 +3,39 @@
 import { VideoMetadata } from '../../../types';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 
+export interface VideoInfo {
+  title: string;
+  seasonSeq?: number;
+  episodeSeq?: number;
+  episodeTitle?: string;
+}
+
+// 넷플릭스 플레이어 정보에서 영상 제목과 (시리즈면) 시즌·회차를 읽는다. 읽을 수 없으면 null.
+export const getVideoInfo = (videoId: string | number): VideoInfo | null => {
+  try {
+    const metadata = window.netflix?.appContext?.state?.playerApp
+      ?.getAPI()
+      ?.getVideoMetadataByVideoId(videoId) as VideoMetadata | undefined;
+    const video = metadata?._metadataObject?.video;
+    if (!video?.title) return null;
+    for (const season of video.seasons || []) {
+      const episode = season.episodes?.find((ep) => ep.id.toString() === videoId.toString());
+      if (episode) {
+        return {
+          title: video.title,
+          seasonSeq: season.seq,
+          episodeSeq: episode.seq,
+          episodeTitle: episode.title,
+        };
+      }
+    }
+    return { title: video.title };
+  } catch (e) {
+    console.error('[NF-STUDY] Failed to read video info:', e);
+    return null;
+  }
+};
+
 export const registerVideoMetadata = (videoId: string | number, totalTabs: number) => {
   console.log('[NF-STUDY] registerVideoMetadata called. videoId:', videoId);
   try {

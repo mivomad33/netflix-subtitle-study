@@ -45,8 +45,10 @@ describe('SentenceList Component', () => {
     overrides: Partial<SentenceAnnotation> = {}
   ): SentenceAnnotation => ({
     id: 'a1',
+    kind: 'netflix',
+    sourceId: 'v1',
     sentenceStartMs: 1500,
-    sentenceText: 'Good morning.',
+    contextText: 'Good morning.',
     start: 5,
     end: 12,
     quote: 'morning',
@@ -182,7 +184,7 @@ describe('SentenceList Component', () => {
     const { container } = render(
       <SentenceList
         {...defaultProps}
-        annotations={[makeAnnotation({ sentenceText: 'Good evening.' })]}
+        annotations={[makeAnnotation({ contextText: 'Good evening.' })]}
       />
     );
     expect(container.querySelector('mark')).toBeNull();

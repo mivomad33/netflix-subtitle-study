@@ -1,14 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { SentenceAnnotation } from '../../../types';
-import { NewAnnotationInput } from '../hooks/useAnnotations';
+import React, { useCallback, useRef } from 'react';
+import { Memo } from '../../../shared/memo/types';
+import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
 import {
-  buildSegments,
-  getAnnotationsForSentence,
-  getRangeOffsetsWithin,
-  rangesOverlap,
-  trimRange,
-} from '../utils/annotationHelper';
-import { AnnotationEditor } from './AnnotationEditor';
+  AnnotatedText,
+  AnnotationToolbar,
+  hasTextSelection,
+  useAnnotationSelection,
+} from '../../../shared/ui/annotationUi';
+import { NewAnnotationInput } from '../hooks/useAnnotations';
+import { getAnnotationsForSentence } from '../utils/annotationHelper';
 
 interface SentenceListProps {
   sentences: {
@@ -28,29 +28,14 @@ interface SentenceListProps {
   toggleTranslation: (index: number) => void;
   handlePlaySentence: (startTime_ms: number) => void;
   sentenceRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
-  annotations: SentenceAnnotation[];
+  annotations: Memo[];
   editingAnnotationId: string | null;
-  onAddAnnotation: (input: NewAnnotationInput) => SentenceAnnotation;
+  onAddAnnotation: (input: NewAnnotationInput) => Memo;
   onUpdateNote: (id: string, note: string) => void;
   onRemoveAnnotation: (id: string) => void;
   onEditAnnotation: (id: string | null) => void;
+  saveFailed?: boolean;
 }
-
-interface PendingSelection {
-  index: number;
-  start: number;
-  end: number;
-  top: number;
-  left: number;
-}
-
-const TOOLBAR_HEIGHT = 36;
-const TOOLBAR_WIDTH = 170;
-
-const hasTextSelection = () => {
-  const selection = window.getSelection();
-  return !!selection && !selection.isCollapsed && selection.toString().trim() !== '';
-};
 
 const formatTime = (ms: number): string => {
   const totalSeconds = Math.floor(ms / 1000);
@@ -88,96 +73,43 @@ export const SentenceList: React.FC<SentenceListProps> = ({
   onUpdateNote,
   onRemoveAnnotation,
   onEditAnnotation,
+  saveFailed = false,
 }) => {
   const listRef = useRef<HTMLDivElement>(null);
-  const [pending, setPending] = useState<PendingSelection | null>(null);
 
-  useEffect(() => {
-    setPending(null);
-  }, [currentTab, itemsPerPage]);
+  // 영어 대사 하나 안에서 고른 글만 받는다. 숨긴 대사는 고를 수 없다.
+  const resolveTarget = useCallback(
+    (key: string, element: HTMLElement) => {
+      if (
+        element.classList.contains('hide-english') &&
+        !element.classList.contains('always-visible')
+      ) {
+        return null;
+      }
+      const sentence = sentences[Number(key)];
+      if (!sentence) return null;
+      return { text: sentence.text, memos: getAnnotationsForSentence(annotations, sentence) };
+    },
+    [annotations, sentences]
+  );
 
-  useEffect(() => {
-    if (!pending) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPending(null);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pending]);
-
-  // 영어 대사 하나 안에서 글을 고르면 하이라이트·메모 도구막대를 띄운다.
-  const handleMouseUp = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-      setPending(null);
-      return;
-    }
-    const range = selection.getRangeAt(0);
-    const ancestor = range.commonAncestorContainer;
-    const ancestorElement =
-      ancestor.nodeType === Node.ELEMENT_NODE
-        ? (ancestor as Element)
-        : ancestor.parentElement;
-    const textElement = ancestorElement?.closest(
-      '.sentence-text'
-    ) as HTMLElement | null;
-    if (
-      !textElement ||
-      !listRef.current?.contains(textElement) ||
-      (textElement.classList.contains('hide-english') &&
-        !textElement.classList.contains('always-visible'))
-    ) {
-      setPending(null);
-      return;
-    }
-
-    const index = Number(textElement.dataset.index);
-    const sentence = sentences[index];
-    const offsets = getRangeOffsetsWithin(textElement, range);
-    const trimmed = sentence && offsets ? trimRange(sentence.text, offsets) : null;
-    if (!sentence || !trimmed) {
-      setPending(null);
-      return;
-    }
-
-    // 이미 칠한 곳과 겹치면 새로 칠하지 않고 그 하이라이트를 연다.
-    const overlapping = getAnnotationsForSentence(annotations, sentence).find(
-      (a) => rangesOverlap(a, trimmed)
-    );
-    if (overlapping) {
-      selection.removeAllRanges();
-      setPending(null);
-      onEditAnnotation(overlapping.id);
-      return;
-    }
-
-    let top = -TOOLBAR_HEIGHT - 6;
-    let left = 0;
-    const sentenceElement = textElement.closest('.sentence');
-    if (sentenceElement && typeof range.getBoundingClientRect === 'function') {
-      const rect = range.getBoundingClientRect();
-      const base = sentenceElement.getBoundingClientRect();
-      top = rect.top - base.top - TOOLBAR_HEIGHT - 6;
-      if (top < 0) top = rect.bottom - base.top + 6;
-      left = Math.max(
-        0,
-        Math.min(rect.left - base.left, base.width - TOOLBAR_WIDTH)
-      );
-    }
-    setPending({ index, ...trimmed, top, left });
-  }, [annotations, onEditAnnotation, sentences]);
+  const { pending, handleMouseUp, clearPending } = useAnnotationSelection({
+    containerRef: listRef,
+    resolveTarget,
+    onOpenMemo: onEditAnnotation,
+    resetKey: `${currentTab}-${itemsPerPage}`,
+  });
 
   const createFromPending = (openEditor: boolean) => {
     if (!pending) return;
-    const sentence = sentences[pending.index];
+    const sentence = sentences[Number(pending.key)];
     const annotation = onAddAnnotation({
       sentenceStartMs: sentence.startTime_ms,
       sentenceText: sentence.text,
       start: pending.start,
       end: pending.end,
     });
-    window.getSelection()?.removeAllRanges();
-    setPending(null);
+    clearPending();
     if (openEditor) onEditAnnotation(annotation.id);
   };
 
@@ -205,6 +137,7 @@ export const SentenceList: React.FC<SentenceListProps> = ({
             className={`sentence ${
               globalIndex === activeIndex ? 'active' : ''
             }`}
+            data-annotation-anchor
           >
             <div className="sentence-header">
               <div
@@ -215,47 +148,26 @@ export const SentenceList: React.FC<SentenceListProps> = ({
               </div>
             </div>
             <div
-              className={`sentence-text ${
+              className={`sentence-text annotatable ${
                 !isEnglishVisible
                   ? visibleEnglishSentences.has(globalIndex)
                     ? 'hide-english always-visible'
                     : 'hide-english'
                   : ''
               }`}
-              data-index={globalIndex}
+              data-annotatable-key={globalIndex}
               onClick={() => {
                 if (!isEnglishVisible && !hasTextSelection()) {
                   toggleEnglishSentence(globalIndex);
                 }
               }}
             >
-              {buildSegments(sentence.text, sentenceAnnotations).map(
-                (segment) =>
-                  segment.annotation ? (
-                    <mark
-                      key={segment.annotation.id}
-                      className={`highlighted-word ${
-                        segment.annotation.note.trim() ? 'has-note' : ''
-                      } ${
-                        segment.annotation.id === editingAnnotationId
-                          ? 'editing'
-                          : ''
-                      }`}
-                      title={segment.annotation.note || '눌러서 메모 쓰기'}
-                      onClick={(event) => {
-                        if (hasTextSelection()) return;
-                        event.stopPropagation();
-                        onEditAnnotation(segment.annotation!.id);
-                      }}
-                    >
-                      {segment.text}
-                    </mark>
-                  ) : (
-                    <React.Fragment key={`text-${segment.start}`}>
-                      {segment.text}
-                    </React.Fragment>
-                  )
-              )}
+                <AnnotatedText
+                text={sentence.text}
+                memos={sentenceAnnotations}
+                editingId={editingAnnotationId}
+                onOpenMemo={onEditAnnotation}
+              />
             </div>
             <div
               className={`sentence-translation ${
@@ -267,28 +179,12 @@ export const SentenceList: React.FC<SentenceListProps> = ({
             >
               {sentence.hTranslation}
             </div>
-            {pending && pending.index === globalIndex && (
-              <div
-                className="annotation-toolbar"
-                style={{ top: pending.top, left: pending.left }}
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseUp={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  className="annotation-toolbar-btn"
-                  onClick={() => createFromPending(false)}
-                >
-                  하이라이트
-                </button>
-                <button
-                  type="button"
-                  className="annotation-toolbar-btn"
-                  onClick={() => createFromPending(true)}
-                >
-                  메모
-                </button>
-              </div>
+            {pending && pending.key === String(globalIndex) && (
+              <AnnotationToolbar
+                pending={pending}
+                onHighlight={() => createFromPending(false)}
+                onMemo={() => createFromPending(true)}
+              />
             )}
             {editingAnnotation && (
               <AnnotationEditor
@@ -299,6 +195,7 @@ export const SentenceList: React.FC<SentenceListProps> = ({
                   onEditAnnotation(null);
                 }}
                 onClose={() => onEditAnnotation(null)}
+                saveFailed={saveFailed}
               />
             )}
           </div>

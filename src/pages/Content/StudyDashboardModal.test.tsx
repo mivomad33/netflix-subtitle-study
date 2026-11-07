@@ -3,6 +3,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import StudyDashboardModal from './StudyDashboardModal';
 import { STORAGE_KEYS } from './constants/storageKeys';
+import { createMemoryArea } from '../../shared/storage/storageArea';
+import { createDirectClient } from '../../shared/bridge/directClient';
+import { getMemo, putMemo } from '../../shared/storage/repo';
+import { netflixMemo } from '../../shared/storage/testFixtures';
+import { setStoreClient } from './utils/storeClient';
 
 describe('StudyDashboardModal Component', () => {
   const mockClose = vi.fn();
@@ -124,5 +129,41 @@ describe('StudyDashboardModal Component', () => {
     expect(screen.getByText('🏆 1회 완독')).toBeInTheDocument();
     expect(screen.getByText('🔥 2회차 진행 중')).toBeInTheDocument();
     expect(screen.getByText('1 / 5 페이지 완료')).toBeInTheDocument();
+  });
+
+  it('keeps the video memos in the shared store when deleting a studied video', async () => {
+    const area = createMemoryArea();
+    setStoreClient(createDirectClient(area));
+    await putMemo(area, netflixMemo({ id: 'm1', sourceId: '12345' }));
+    localStorage.setItem(
+      STORAGE_KEYS.STUDIED_VIDEOS,
+      JSON.stringify({
+        '12345': { videoId: '12345', title: 'Show', cover: '', epTitle: '', epSeq: 1, seasonSeq: 1, totalPages: 1, updatedAt: 1 },
+      })
+    );
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<StudyDashboardModal onClose={mockClose} />);
+    fireEvent.click(screen.getByTitle('학습 기록 삭제'));
+    await waitFor(() => expect(screen.queryByText('Show')).toBeNull());
+    expect(await getMemo(area, 'm1')).not.toBeNull();
+    setStoreClient(null);
+  });
+
+  it('opens the memo collection and the book reader in a new tab through the content script', async () => {
+    const calls: unknown[] = [];
+    setStoreClient({
+      async call<T>(call: unknown): Promise<T> {
+        calls.push(call);
+        return undefined as T;
+      },
+    });
+    render(<StudyDashboardModal onClose={mockClose} />);
+    fireEvent.click(screen.getByRole('button', { name: '메모 모아 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: '원서 리더' }));
+    expect(calls).toEqual([
+      { op: 'page.open', page: 'memos' },
+      { op: 'page.open', page: 'reader' },
+    ]);
+    setStoreClient(null);
   });
 });

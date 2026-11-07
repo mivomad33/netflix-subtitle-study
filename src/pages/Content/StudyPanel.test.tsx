@@ -1,5 +1,9 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { createMemoryArea } from '../../shared/storage/storageArea';
+import { createDirectClient } from '../../shared/bridge/directClient';
+import { getMemo, listMemos } from '../../shared/storage/repo';
+import { setStoreClient } from './utils/storeClient';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import StudyPanel from './StudyPanel';
 
@@ -165,46 +169,124 @@ describe('StudyPanel Main Component', () => {
     expect(confirmSpy).toHaveBeenCalled();
   });
 
-  it('saves a memo on a stored highlight and keeps it after a progress reset', () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    localStorage.setItem(
-      'NF_annotations_12345',
-      JSON.stringify([
-        {
-          id: 'a1',
-          sentenceStartMs: 3000,
-          sentenceText: 'Sentence Two',
-          start: 9,
-          end: 12,
-          quote: 'Two',
-          note: '',
-          createdAt: 0,
-          updatedAt: 0,
-        },
-      ])
-    );
+  describe('memos in the shared store', () => {
+    const legacyMemo = {
+      id: 'a1',
+      sentenceStartMs: 3000,
+      sentenceText: 'Sentence Two',
+      start: 9,
+      end: 12,
+      quote: 'Two',
+      note: '',
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    let area: ReturnType<typeof createMemoryArea>;
 
-    const { container } = render(
-      <StudyPanel
-        sentences={mockSentences}
-        videoId="12345"
-        isPanelVisible={true}
-        isOverlayVisible={false}
-        onTogglePanel={mockTogglePanel}
-        onToggleOverlay={mockToggleOverlay}
-      />
-    );
-
-    fireEvent.click(container.querySelector('mark')!);
-    fireEvent.change(screen.getByLabelText('메모'), {
-      target: { value: 'number two\nsecond line' },
+    beforeEach(() => {
+      localStorage.setItem('NF_isEnglishVisible', 'true');
+      area = createMemoryArea();
+      setStoreClient(createDirectClient(area));
     });
 
-    const saved = JSON.parse(localStorage.getItem('NF_annotations_12345')!);
-    expect(saved[0].note).toBe('number two\nsecond line');
+    afterEach(() => setStoreClient(null));
 
-    fireEvent.click(screen.getByTitle('학습 환경 설정'));
-    fireEvent.click(screen.getByText('현재 영상 학습 초기화'));
-    expect(localStorage.getItem('NF_annotations_12345')).not.toBeNull();
+    const renderPanel = () =>
+      render(
+        <StudyPanel
+          sentences={mockSentences}
+          videoId="12345"
+          isPanelVisible={true}
+          isOverlayVisible={false}
+          onTogglePanel={mockTogglePanel}
+          onToggleOverlay={mockToggleOverlay}
+        />
+      );
+
+    it('copies legacy memos, edits them in the shared store, and leaves the original untouched', async () => {
+      const original = JSON.stringify([legacyMemo]);
+      localStorage.setItem('NF_annotations_12345', original);
+
+      const { container } = renderPanel();
+      await waitFor(() => expect(container.querySelector('mark')).not.toBeNull());
+
+      fireEvent.click(container.querySelector('mark')!);
+      fireEvent.change(screen.getByLabelText('메모'), {
+        target: { value: 'number two\nsecond line' },
+      });
+
+      await waitFor(async () =>
+        expect((await getMemo(area, 'a1'))?.note).toBe('number two\nsecond line')
+      );
+      expect((await getMemo(area, 'a1'))?.videoTitle).toBeUndefined();
+      expect(localStorage.getItem('NF_annotations_12345')).toBe(original);
+    });
+
+    it('saves new memos with the video title', async () => {
+      const { container } = renderPanel();
+      const textElement = container.querySelectorAll('.sentence-text')[0];
+      const range = document.createRange();
+      range.setStart(textElement.firstChild!, 0);
+      range.setEnd(textElement.firstChild!, 8);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      fireEvent.mouseUp(textElement);
+      fireEvent.click(screen.getByRole('button', { name: '하이라이트' }));
+
+      await waitFor(async () => expect(await listMemos(area)).toHaveLength(1));
+      const [memo] = await listMemos(area);
+      expect(memo).toMatchObject({
+        kind: 'netflix',
+        sourceId: '12345',
+        quote: 'Sentence',
+        sentenceStartMs: 1000,
+        videoTitle: 'Test Show',
+      });
+    });
+
+    it('keeps a memo made before stored memos finish loading', async () => {
+      let releaseList: (() => void) | undefined;
+      const direct = createDirectClient(area);
+      setStoreClient({
+        async call<T>(call: any): Promise<T> {
+          // 목록은 새 메모를 저장하기 전에 읽어 두고, 새 메모를 만든 뒤에 돌려준다.
+          const result = direct.call<T>(call);
+          if (call.op === 'memos.list') {
+            await new Promise<void>((resolve) => (releaseList = resolve));
+          }
+          return result;
+        },
+      });
+      localStorage.setItem('NF_annotations_12345', JSON.stringify([legacyMemo]));
+
+      const { container } = renderPanel();
+      // 저장된 메모 목록을 읽기 시작한 뒤, 돌려주기 전에 새 메모를 만든다.
+      await waitFor(() => expect(releaseList).toBeDefined());
+      const textElement = container.querySelectorAll('.sentence-text')[0];
+      const range = document.createRange();
+      range.setStart(textElement.firstChild!, 0);
+      range.setEnd(textElement.firstChild!, 8);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      fireEvent.mouseUp(textElement);
+      fireEvent.click(screen.getByRole('button', { name: '하이라이트' }));
+      expect(container.querySelectorAll('mark')).toHaveLength(1);
+
+      await act(async () => releaseList!());
+      await waitFor(() => expect(container.querySelectorAll('mark')).toHaveLength(2));
+    });
+
+    it('keeps memos after resetting progress or changing lines per page', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      localStorage.setItem('NF_annotations_12345', JSON.stringify([legacyMemo]));
+      const { container } = renderPanel();
+      await waitFor(() => expect(container.querySelector('mark')).not.toBeNull());
+
+      fireEvent.click(screen.getByTitle('학습 환경 설정'));
+      fireEvent.click(screen.getByText('현재 영상 학습 초기화'));
+      fireEvent.click(screen.getByRole('button', { name: '20' }));
+
+      expect(await getMemo(area, 'a1')).not.toBeNull();
+    });
   });
 });

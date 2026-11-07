@@ -1,14 +1,16 @@
 import React, { useEffect, useRef } from 'react';
-import { SentenceAnnotation } from '../../../types';
+import { Memo } from '../memo/types';
+import './annotations.css';
 
 interface AnnotationEditorProps {
-  annotation: SentenceAnnotation;
+  annotation: Memo;
+  saveFailed?: boolean;
   onChangeNote: (note: string) => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-// 넷플릭스 플레이어 단축키(스페이스, F, 화살표 등)가 메모 입력에 반응하지 않게 키 이벤트를 여기서 멈춘다.
+// 넷플릭스 플레이어 단축키(스페이스, F, 화살표 등)나 화면 단축키가 메모 입력에 반응하지 않게 키 이벤트를 여기서 멈춘다.
 const stopKeyPropagation = (event: React.KeyboardEvent) => {
   event.stopPropagation();
 };
@@ -18,6 +20,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   onChangeNote,
   onDelete,
   onClose,
+  saveFailed = false,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -74,7 +77,13 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
         onChange={(e) => onChangeNote(e.target.value)}
       />
       <div className="annotation-editor-footer">
-        <span className="annotation-editor-hint">자동 저장 · Esc로 닫기</span>
+        {saveFailed ? (
+          <span className="annotation-editor-error" role="alert">
+            저장하지 못했습니다. 쓴 글은 화면에 남아 있습니다.
+          </span>
+        ) : (
+          <span className="annotation-editor-hint">자동 저장 · Esc로 닫기</span>
+        )}
         <div className="annotation-editor-actions">
           <button
             type="button"

@@ -273,7 +273,7 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
     return pages;
   };
 
-  const { annotations, addAnnotation, updateNote, removeAnnotation } =
+  const { annotations, addAnnotation, updateNote, removeAnnotation, saveFailed } =
     useAnnotations(videoId);
   const [editingAnnotationId, setEditingAnnotationId] = useState<
     string | null
@@ -530,6 +530,7 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
             onUpdateNote={updateNote}
             onRemoveAnnotation={removeAnnotation}
             onEditAnnotation={handleEditAnnotation}
+            saveFailed={saveFailed}
           />
         </div>
       )}
