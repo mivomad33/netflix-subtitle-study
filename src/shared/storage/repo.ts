@@ -167,21 +167,24 @@ export async function setReaderSettings(area: StorageArea, settings: ReaderSetti
 
 // ---- 학습 패널에서 위치를 찾지 못한 넷플릭스 메모 ----
 
+// 넷플릭스 페이지에서 오는 요청이라 키를 지우지 않고 빈 목록으로 덮어쓴다(4.1-4: 메모 외의 키는 지울 수 없다).
 export async function setUnplacedNetflixMemos(area: StorageArea, videoId: string, ids: string[]) {
-  const key = KEY.netflixUnplaced(videoId);
-  if (ids.length === 0) await area.remove([key]);
-  else await area.set({ [key]: ids });
+  await area.set({ [KEY.netflixUnplaced(videoId)]: ids });
 }
 
+// 영상마다 그 영상에서 위치를 찾지 못한 메모 id. 메모는 자기 영상의 목록으로만 판정한다.
 export async function getUnplacedNetflixMemoIds(
   area: StorageArea,
   videoIds: string[]
-): Promise<Set<string>> {
-  if (videoIds.length === 0) return new Set();
+): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>();
+  if (videoIds.length === 0) return result;
   const values = await area.get(videoIds.map(KEY.netflixUnplaced));
-  return new Set(
-    Object.values(values).flatMap((v) =>
-      Array.isArray(v) ? v.filter((id): id is string => typeof id === 'string') : []
-    )
-  );
+  videoIds.forEach((videoId) => {
+    const v = values[KEY.netflixUnplaced(videoId)];
+    if (Array.isArray(v)) {
+      result.set(videoId, new Set(v.filter((id): id is string => typeof id === 'string')));
+    }
+  });
+  return result;
 }

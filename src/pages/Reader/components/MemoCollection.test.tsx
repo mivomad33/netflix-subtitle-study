@@ -128,10 +128,13 @@ describe('MemoCollection', () => {
     await putMemo(area, netflixMemo({ id: 'n-lost', sourceId: '81234567', sentenceStartMs: 83_900 }));
     await putMemo(area, netflixMemo({ id: 'n-ok', sourceId: '81234567', sentenceStartMs: 12_000, updatedAt: 0 }));
     await setUnplacedNetflixMemos(area, '81234567', ['n-lost']);
+    // 다른 영상의 목록에 들어간 id는 이 메모의 판정에 쓰지 않는다.
+    await putMemo(area, netflixMemo({ id: 'n-other', sourceId: 'v9', updatedAt: 0 }));
+    await setUnplacedNetflixMemos(area, 'v9', ['n-ok']);
     const openTab = vi.fn();
     const { container } = renderCollection(area, openTab);
 
-    await waitFor(() => expect(container.querySelectorAll('[data-memo-card]')).toHaveLength(2));
+    await waitFor(() => expect(container.querySelectorAll('[data-memo-card]')).toHaveLength(3));
     expect(within(card(container, 'n-lost')).getByText('위치를 찾지 못함')).toBeInTheDocument();
     expect(within(card(container, 'n-ok')).queryByText('위치를 찾지 못함')).toBeNull();
 

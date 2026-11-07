@@ -284,7 +284,7 @@ describe('StudyPanel Main Component', () => {
       await waitFor(() => expect(container.querySelectorAll('mark')).toHaveLength(1));
 
       await waitFor(async () =>
-        expect(Array.from(await getUnplacedNetflixMemoIds(area, ['12345']))).toEqual(['lost'])
+        expect(Array.from((await getUnplacedNetflixMemoIds(area, ['12345'])).get('12345') ?? [])).toEqual(['lost'])
       );
       // 4.1-5 그리지 못한 메모도 저장소에서 지우지 않는다.
       expect(await getMemo(area, 'lost')).not.toBeNull();
@@ -294,11 +294,11 @@ describe('StudyPanel Main Component', () => {
       await putMemo(area, netflixMemo({ id: 'lost', sourceId: '12345', contextText: 'A line that was cut.', start: 2, end: 6, quote: 'line' }));
       const props = { isPanelVisible: true, isOverlayVisible: false, onTogglePanel: mockTogglePanel, onToggleOverlay: mockToggleOverlay };
       const { rerender } = render(<StudyPanel sentences={mockSentences} videoId="12345" {...props} />);
-      await waitFor(async () => expect((await getUnplacedNetflixMemoIds(area, ['12345'])).size).toBe(1));
+      await waitFor(async () => expect((await getUnplacedNetflixMemoIds(area, ['12345'])).get('12345')?.size).toBe(1));
 
       rerender(<StudyPanel sentences={[{ ...mockSentences[0], text: 'Other show line' }]} videoId="67890" {...props} />);
       await new Promise((r) => setTimeout(r, 50));
-      expect((await getUnplacedNetflixMemoIds(area, ['67890'])).size).toBe(0);
+      expect((await getUnplacedNetflixMemoIds(area, ['67890'])).get('67890')?.size ?? 0).toBe(0);
     });
 
     it('keeps memos after resetting progress or changing lines per page', async () => {

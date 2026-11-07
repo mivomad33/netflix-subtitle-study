@@ -38,8 +38,11 @@ export interface BridgeResponse {
 
 // 한 영상에서 위치를 찾지 못했다고 남길 수 있는 메모 수의 상한.
 const MAX_UNPLACED_IDS = 5000;
+// 위치를 찾지 못한 메모 목록에 들어가는 영상 id·메모 id의 길이 상한(숨은 키가 커지지 않게).
+const MAX_ID_LENGTH = 200;
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v !== '';
+const isShortId = (v: unknown): v is string => isNonEmptyString(v) && v.length <= MAX_ID_LENGTH;
 
 const isLegacyPayload = (v: unknown): v is LegacyPayload => {
   if (!v || typeof v !== 'object') return false;
@@ -64,10 +67,10 @@ export function parseBridgeRequest(data: unknown): BridgeRequest | null {
     case 'memos.delete':
       return isNonEmptyString(d.id) ? (d as unknown as BridgeRequest) : null;
     case 'memos.reportUnplaced':
-      return isNonEmptyString(d.videoId) &&
+      return isShortId(d.videoId) &&
         Array.isArray(d.ids) &&
         d.ids.length <= MAX_UNPLACED_IDS &&
-        d.ids.every(isNonEmptyString)
+        d.ids.every(isShortId)
         ? (d as unknown as BridgeRequest)
         : null;
     case 'legacy.migrate':

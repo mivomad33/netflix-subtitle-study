@@ -56,7 +56,7 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
   const [memos, setMemos] = useState<Memo[] | null>(null);
   const [books, setBooks] = useState<BookMeta[]>([]);
   const [chapterTexts, setChapterTexts] = useState<Record<string, string[]>>({});
-  const [unplacedNetflix, setUnplacedNetflix] = useState<Set<string>>(() => new Set());
+  const [unplacedNetflix, setUnplacedNetflix] = useState<Map<string, Set<string>>>(() => new Map());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SourceFilter>({ kind: 'all' });
@@ -117,7 +117,7 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
 
   const isAnchored = useCallback(
     (m: Memo) =>
-      (m.kind === 'netflix' && !unplacedNetflix.has(m.id)) ||
+      (m.kind === 'netflix' && !unplacedNetflix.get(m.sourceId)?.has(m.id)) ||
       (m.kind === 'book' && booksById.has(m.sourceId) && isBookMemoAnchored(m, chapterTexts[chapterTextKey(m)])),
     [booksById, chapterTexts, unplacedNetflix]
   );

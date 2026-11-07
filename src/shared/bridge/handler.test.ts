@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createMemoryArea } from '../storage/storageArea';
-import { putMemo, listMemos, saveBook, getChapterParagraphs, getUnplacedNetflixMemoIds } from '../storage/repo';
+import { putMemo, listMemos, saveBook, getChapterParagraphs, getUnplacedNetflixMemoIds, getBook } from '../storage/repo';
 import { netflixMemo, bookMemo } from '../storage/testFixtures';
 import { BRIDGE_REQUEST, parseBridgeRequest } from './protocol';
 import { handleBridgeRequest } from './handler';
@@ -54,18 +54,23 @@ describe('bridge request handling', () => {
     expect((await run(area, { op: 'memos.delete', id: '../book:bk1' }))!.ok).toBe(true);
     expect(await run(area, { op: 'storage.remove', keys: ['book:bk1'] })).toBeNull();
     expect(await run(area, { op: 'storage.get', keys: ['bookch:bk1:c1'] })).toBeNull();
+    // 위치를 찾지 못한 메모 목록 요청으로 책 키를 건드리려는 시도
+    expect((await run(area, { op: 'memos.reportUnplaced', videoId: 'x:book:bk1', ids: [] }))!.ok).toBe(true);
+    expect((await run(area, { op: 'memos.reportUnplaced', videoId: 'bk1', ids: ['b1'] }))!.ok).toBe(true);
 
     expect((await listMemos(area)).find((m) => m.id === 'b1')!.note).toBe('a pot for boiling water');
     expect(await getChapterParagraphs(area, 'bk1', 'c1')).toEqual(['Keep me.']);
+    expect(await getBook(area, 'bk1')).not.toBeNull();
   });
 
   it('records and clears the Netflix memos the panel could not place', async () => {
     const area = createMemoryArea();
     expect(await run(area, { op: 'memos.reportUnplaced', videoId: 'v1', ids: ['n1', 'n2'] })).toEqual({ ok: true });
-    expect(Array.from(await getUnplacedNetflixMemoIds(area, ['v1', 'v2'])).sort()).toEqual(['n1', 'n2']);
+    expect(Array.from((await getUnplacedNetflixMemoIds(area, ['v1', 'v2'])).get('v1')!).sort()).toEqual(['n1', 'n2']);
     expect(await run(area, { op: 'memos.reportUnplaced', videoId: 'v1', ids: [] })).toEqual({ ok: true });
-    expect((await getUnplacedNetflixMemoIds(area, ['v1'])).size).toBe(0);
-    expect(await area.getKeys()).toEqual([]);
+    expect((await getUnplacedNetflixMemoIds(area, ['v1'])).get('v1')!.size).toBe(0);
+    // 메모 외의 키는 지우지 않고 빈 목록으로 남긴다.
+    expect(await area.getKeys()).toEqual(['meta:netflixUnplaced:v1']);
   });
 
   it('ignores malformed messages', () => {
@@ -76,6 +81,8 @@ describe('bridge request handling', () => {
     expect(parseBridgeRequest(req({ op: 'page.open', page: 'settings' }))).toBeNull();
     expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v', ids: [1] }))).toBeNull();
     expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v', ids: 'n1' }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v'.repeat(201), ids: [] }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v', ids: ['n'.repeat(201)] }))).toBeNull();
     expect(parseBridgeRequest({ op: 'memos.list', videoId: 'v', channel: BRIDGE_REQUEST })).toBeNull();
   });
 });
