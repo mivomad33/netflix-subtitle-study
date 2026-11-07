@@ -117,6 +117,8 @@ describe('SentenceList Component', () => {
     selectText(textElement.firstChild!, 4, 12);
     fireEvent.mouseUp(textElement);
 
+    // 4.3-5 넷플릭스 학습 패널의 도구막대에는 "읽기"가 없다.
+    expect(screen.queryByRole('button', { name: '읽기' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '하이라이트' }));
     expect(onAddAnnotation).toHaveBeenCalledWith({
       sentenceStartMs: 1500,

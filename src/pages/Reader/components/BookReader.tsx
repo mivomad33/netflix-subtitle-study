@@ -21,8 +21,13 @@ import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
 import {
   AnnotatedText,
   AnnotationToolbar,
+  SentencePiece,
+  hasTextSelection,
   useAnnotationSelection,
 } from '../../../shared/ui/annotationUi';
+import { createBrowserBackend } from '../tts/speaker';
+import { splitSentences } from '../tts/sentences';
+import { ReadAloudBar, ReadAloudSettings, readAloudSettings, useReadAloud } from './ReadAloud';
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
 import { isBookMemoAnchored, memosForParagraph } from '../logic/bookMemos';
@@ -32,6 +37,76 @@ const MAX_FONT = 28;
 const HEADER_OFFSET = 72; // 위쪽 고정 머리글 높이. 이보다 아래에 걸친 첫 문단을 읽는 위치로 본다.
 const POSITION_SAVE_DELAY = 400;
 const NO_MEMOS: Memo[] = [];
+const TOOLBAR_WIDTH = 230; // 하이라이트·메모·읽기 세 버튼
+// 자동 스크롤이 끝날 때까지 기다리는 최대 시간. 그 사이의 스크롤은 사용자 스크롤로 보지 않는다.
+const AUTO_SCROLL_GRACE = 2000;
+const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End']);
+
+// 단축키를 쓰지 않는 곳: 입력칸, 고르기 상자, 메모 영역(4.3-9)
+const isTypingTarget = (target: EventTarget | null) => {
+  const el = target as HTMLElement | null;
+  return (
+    !!el &&
+    typeof el.closest === 'function' &&
+    (el.tagName === 'INPUT' ||
+      el.tagName === 'TEXTAREA' ||
+      el.tagName === 'SELECT' ||
+      el.isContentEditable ||
+      !!el.closest('.annotation-editor'))
+  );
+};
+
+interface ParagraphProps {
+  index: number;
+  text: string;
+  memos: Memo[];
+  editingId: string | null;
+  onOpenMemo: (id: string) => void;
+  sentences?: SentencePiece[];
+  currentSentence: number;
+  onReadFrom?: (index: number) => void;
+  extra: React.ReactNode;
+}
+
+// 문단 하나. 읽는 문장이 바뀔 때 그 문단만 다시 그리도록 memo로 감싼다.
+const ReaderParagraph = React.memo(function ReaderParagraph({
+  index,
+  text,
+  memos,
+  editingId,
+  onOpenMemo,
+  sentences,
+  currentSentence,
+  onReadFrom,
+  extra,
+}: ParagraphProps) {
+  return (
+    <div className="nfr-paragraph" data-annotation-anchor data-paragraph-index={index}>
+      {onReadFrom && (
+        <button
+          type="button"
+          className="nfr-read-from"
+          aria-label="여기서부터 읽기"
+          title="여기서부터 읽기"
+          onClick={() => onReadFrom(index)}
+        >
+          ▶
+        </button>
+      )}
+      <p className="annotatable" data-annotatable-key={index}>
+        <AnnotatedText
+          text={text}
+          memos={memos}
+          editingId={editingId}
+          onOpenMemo={onOpenMemo}
+          sentences={sentences}
+          currentSentence={currentSentence}
+        />
+      </p>
+      {extra}
+    </div>
+  );
+});
 
 interface Props {
   bookId: string;
@@ -43,7 +118,8 @@ interface Props {
 type ScrollTarget = { kind: 'memo'; memoId: string } | { kind: 'paragraph'; index: number } | null;
 
 export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialMemoId, navigate }) => {
-  const { area } = useReaderEnv();
+  const { area, speech: envSpeech } = useReaderEnv();
+  const speech = useMemo(() => (envSpeech === undefined ? createBrowserBackend() : envSpeech), [envSpeech]);
   const [book, setBook] = useState<BookMeta | null | 'missing'>(null);
   const [chapterId, setChapterId] = useState<string | null>(null);
   const [paragraphs, setParagraphs] = useState<string[] | null>(null);
@@ -56,6 +132,14 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [charCounts, setCharCounts] = useState<Record<string, number> | null>(null);
   const [doneSaveFailed, setDoneSaveFailed] = useState<'list' | 'end' | null>(null);
+  const [readSettings, setReadSettings] = useState<ReadAloudSettings>(() => readAloudSettings({ fontSize: 14 }));
+  // 읽는 문장을 따라 스크롤하는지. 사용자가 직접 스크롤하면 멈춘다(4.3-3).
+  const [following, setFollowing] = useState(true);
+  const positionRef = useRef<{ chapterId: string; index: number } | null>(null);
+  const autoScrollUntil = useRef(0);
+  const startOnLoad = useRef(false);
+  const settingsQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const readBarRef = useRef<HTMLDivElement>(null);
   const scrollTarget = useRef<ScrollTarget>(null);
   const articleRef = useRef<HTMLDivElement>(null);
   const memosRef = useRef<Memo[]>([]);
@@ -74,6 +158,8 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
       .then(([loadedBook, position, loadedMemos, settings, completions]) => {
         if (cancelled) return;
         setFontSize(settings.fontSize);
+        setReadSettings(readAloudSettings(settings));
+        if (position) positionRef.current = { chapterId: position.chapterId, index: position.paragraphIndex };
         if (!loadedBook) {
           setBook('missing');
           return;
@@ -180,6 +266,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   const savePosition = useCallback(
     (chapter: string, index: number) => {
       const position: ReadingPosition = { bookId, chapterId: chapter, paragraphIndex: index, updatedAt: Date.now() };
+      positionRef.current = { chapterId: chapter, index };
       setPosition(area, position).catch((e) => console.error('[NF-STUDY] Failed to save position:', e));
     },
     [area, bookId]
@@ -258,7 +345,170 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     resolveTarget,
     onOpenMemo: setEditingId,
     resetKey: chapterId,
+    toolbarWidth: TOOLBAR_WIDTH,
   });
+
+  // ---- 소리 내어 읽기 ----
+  const { speaker, snapshot, voices, voice, sentences, piecesOf } = useReadAloud(speech, paragraphs, readSettings);
+  const canRead = !!speaker && !!voice;
+  const reading = snapshot.mode === 'chapter' && (snapshot.status === 'playing' || snapshot.status === 'paused');
+
+  // 설정은 차례로 쓴다. 겹쳐 쓰면 앞에서 바꾼 항목이 사라질 수 있다.
+  const saveSettings = useCallback(
+    (patch: Parameters<typeof updateReaderSettings>[1]) => {
+      settingsQueue.current = settingsQueue.current
+        .then(() => updateReaderSettings(area, patch))
+        .catch((e) => console.error('[NF-STUDY] Failed to save reader settings:', e));
+    },
+    [area]
+  );
+
+  const changeRead = useCallback(
+    (patch: Partial<ReadAloudSettings>) => {
+      setReadSettings((prev) => ({ ...prev, ...patch }));
+      saveSettings(patch);
+    },
+    [saveSettings]
+  );
+
+  const startAt = useCallback(
+    (index: number) => {
+      if (!speaker) return;
+      setFollowing(true);
+      speaker.start(index);
+    },
+    [speaker]
+  );
+
+  // 처음 재생하면 읽던 위치의 문단부터 읽는다.
+  const startIndex = () => {
+    const position = positionRef.current;
+    const first = position && position.chapterId === chapterId ? sentences.firstOfParagraph[position.index] : 0;
+    return first !== undefined && first < sentences.items.length ? first : 0;
+  };
+
+  const playPause = () => {
+    if (!speaker || !voice) return;
+    const now = speaker.snapshot();
+    if (now.status === 'playing') {
+      if (now.mode === 'selection') speaker.stop();
+      else speaker.pause();
+      return;
+    }
+    setFollowing(true);
+    if (!speaker.resume()) speaker.start(startIndex());
+  };
+
+  const readFrom = useCallback(
+    (paragraphIndex: number) => {
+      const first = sentences.firstOfParagraph[paragraphIndex];
+      if (first !== undefined && first < sentences.items.length) startAt(first);
+    },
+    [sentences, startAt]
+  );
+
+  const readSelection = () => {
+    if (!pending || !paragraphs || !speaker) return;
+    const text = paragraphs[Number(pending.key)].slice(pending.start, pending.end);
+    speaker.speakSelection(splitSentences(text).map((piece) => text.slice(piece.start, piece.end)));
+    clearPending();
+  };
+
+  // 읽는 중에 본문의 문장을 누르면 그 문장부터 읽는다. 하이라이트를 누르면 메모 영역이 열린다(mark가 처리한다).
+  const handleBodyClick = (event: React.MouseEvent) => {
+    if (!reading || !speaker || hasTextSelection()) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('mark, button, .annotation-editor, .annotation-toolbar')) return;
+    const sentence = target.closest<HTMLElement>('[data-si]');
+    if (sentence) startAt(Number(sentence.dataset.si));
+  };
+
+  const followReading = () => {
+    setFollowing(true);
+    const el = articleRef.current?.querySelector(`[data-si="${snapshot.index}"]`);
+    if (el) {
+      autoScrollUntil.current = Date.now() + AUTO_SCROLL_GRACE;
+      el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    }
+  };
+
+  // 읽는 문장이 화면 밖으로 나가면 따라 스크롤한다.
+  useEffect(() => {
+    if (!following || snapshot.mode !== 'chapter' || snapshot.status !== 'playing' || snapshot.index < 0) return;
+    const el = articleRef.current?.querySelector(`[data-si="${snapshot.index}"]`);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const top = HEADER_OFFSET + (readBarRef.current?.offsetHeight ?? 0);
+    if (rect.top >= top && rect.bottom <= window.innerHeight) return;
+    autoScrollUntil.current = Date.now() + AUTO_SCROLL_GRACE;
+    el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [following, snapshot]);
+
+  // 읽는 중에 사용자가 직접 스크롤하면 따라가기를 멈춘다.
+  useEffect(() => {
+    if (!reading) return;
+    const userScrolled = () => setFollowing(false);
+    const onScroll = () => {
+      if (Date.now() > autoScrollUntil.current) userScrolled();
+    };
+    const onScrollEnd = () => {
+      autoScrollUntil.current = 0;
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(event.key) && !isTypingTarget(event.target)) userScrolled();
+    };
+    window.addEventListener('wheel', userScrolled, { passive: true });
+    window.addEventListener('touchmove', userScrolled, { passive: true });
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scrollend', onScrollEnd);
+    return () => {
+      window.removeEventListener('wheel', userScrolled);
+      window.removeEventListener('touchmove', userScrolled);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scrollend', onScrollEnd);
+    };
+  }, [reading]);
+
+  // "다음 장 읽기"로 연 장은 본문이 그려지면 처음부터 읽는다.
+  useEffect(() => {
+    if (!startOnLoad.current || sentences.items.length === 0) return;
+    startOnLoad.current = false;
+    startAt(0);
+  }, [sentences, startAt]);
+
+  // 단축키(넷플릭스 학습 패널과 같은 키, 4.3-9)
+  const shortcuts = useRef<Record<string, () => void>>({});
+  shortcuts.current = {
+    Space: playPause,
+    KeyA: () => speaker?.previous(),
+    KeyS: () => speaker?.restart(),
+    KeyD: () => speaker?.next(),
+    KeyQ: () => changeRead({ autoPause: !readSettings.autoPause }),
+    KeyR: () => changeRead({ repeat: !readSettings.repeat }),
+  };
+  useEffect(() => {
+    if (!canRead) return;
+    const ignored = (event: KeyboardEvent) =>
+      event.ctrlKey || event.metaKey || event.altKey || isTypingTarget(event.target);
+    const onKeyDown = (event: KeyboardEvent) => {
+      const action = shortcuts.current[event.code];
+      if (!action || ignored(event)) return;
+      // 버튼에 포커스가 있어도 Space가 그 버튼을 누르지 않게 한다.
+      event.preventDefault();
+      if (!event.repeat) action();
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && !ignored(event)) event.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [canRead]);
 
   const createFromPending = (openEditor: boolean) => {
     if (!pending || !paragraphs || !chapterId) return;
@@ -303,9 +553,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     if (fontSize === null) return;
     const next = Math.min(MAX_FONT, Math.max(MIN_FONT, fontSize + delta));
     setFontSize(next);
-    updateReaderSettings(area, { fontSize: next }).catch((e) =>
-      console.error('[NF-STUDY] Failed to save reader settings:', e)
-    );
+    saveSettings({ fontSize: next });
   };
 
   const focusMemo = (memo: Memo) => {
@@ -348,6 +596,8 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   const progress = charCounts
     ? bookProgress(book, charCounts, new Set(Object.keys(done).filter((id) => done[id])))
     : null;
+  const current = reading ? snapshot.index : -1;
+  const currentParagraph = current >= 0 ? sentences.items[current]?.paragraphIndex : -1;
   const doneFailedNotice = (
     <p className="nfr-error" role="alert">
       저장하지 못했습니다. 다시 눌러 주세요.
@@ -407,13 +657,36 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
             </button>
           </div>
         </div>
+        <div className="nfr-read-sticky" ref={readBarRef}>
+          <ReadAloudBar
+            supported={!!speaker}
+            snapshot={snapshot}
+            voices={voices}
+            voice={voice}
+            settings={readSettings}
+            following={following}
+            hasNextChapter={!!nextChapter}
+            onChange={changeRead}
+            onPlayPause={playPause}
+            onStop={() => speaker?.stop()}
+            onPrevious={() => speaker?.previous()}
+            onNext={() => speaker?.next()}
+            onFollow={followReading}
+            onReadNextChapter={() => {
+              if (!nextChapter) return;
+              startOnLoad.current = true;
+              openChapter(nextChapter.id);
+            }}
+          />
+        </div>
         <h2 id="chapter-title" className="nfr-chapter-title">
           {chapter?.title}
         </h2>
         <div
-          className="nfr-paragraphs"
+          className={`nfr-paragraphs ${reading ? 'reading' : ''}`}
           ref={articleRef}
           onMouseUp={handleMouseUp}
+          onClick={handleBodyClick}
           style={{ fontSize: `${fontSize}pt` }}
           data-testid="reader-body"
         >
@@ -422,28 +695,42 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
           {paragraphs?.map((text, index) => {
             const own = paragraphMemos(index);
             const editing = own.find((m) => m.id === editingId);
+            const showToolbar = pending && pending.key === String(index);
             return (
-              <div key={index} className="nfr-paragraph" data-annotation-anchor data-paragraph-index={index}>
-                <p className="annotatable" data-annotatable-key={index}>
-                  <AnnotatedText text={text} memos={own} editingId={editingId} onOpenMemo={setEditingId} />
-                </p>
-                {pending && pending.key === String(index) && (
-                  <AnnotationToolbar
-                    pending={pending}
-                    onHighlight={() => createFromPending(false)}
-                    onMemo={() => createFromPending(true)}
-                  />
-                )}
-                {editing && (
-                  <AnnotationEditor
-                    annotation={editing}
-                    saveFailed={saveFailed}
-                    onChangeNote={(note) => updateNote(editing.id, note)}
-                    onDelete={() => removeMemo(editing.id)}
-                    onClose={() => setEditingId(null)}
-                  />
-                )}
-              </div>
+              <ReaderParagraph
+                key={index}
+                index={index}
+                text={text}
+                memos={own}
+                editingId={editingId}
+                onOpenMemo={setEditingId}
+                sentences={speaker ? piecesOf(index) : undefined}
+                currentSentence={index === currentParagraph ? current : -1}
+                onReadFrom={canRead ? readFrom : undefined}
+                extra={
+                  showToolbar || editing ? (
+                    <>
+                      {showToolbar && (
+                        <AnnotationToolbar
+                          pending={pending}
+                          onHighlight={() => createFromPending(false)}
+                          onMemo={() => createFromPending(true)}
+                          onRead={canRead ? readSelection : undefined}
+                        />
+                      )}
+                      {editing && (
+                        <AnnotationEditor
+                          annotation={editing}
+                          saveFailed={saveFailed}
+                          onChangeNote={(note) => updateNote(editing.id, note)}
+                          onDelete={() => removeMemo(editing.id)}
+                          onClose={() => setEditingId(null)}
+                        />
+                      )}
+                    </>
+                  ) : null
+                }
+              />
             );
           })}
         </div>

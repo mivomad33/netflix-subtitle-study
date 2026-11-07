@@ -1,10 +1,13 @@
 import React, { createContext, useContext } from 'react';
 import { StorageArea } from '../../shared/storage/storageArea';
+import { SpeechBackend } from './tts/speaker';
 
 // 원서 리더·모아 보기 화면이 쓰는 바깥 기능. 확장 프로그램에서는 chrome.*, 개발 서버와 테스트에서는 대체를 넣는다.
 export interface ReaderEnv {
   area: StorageArea;
   openTab: (url: string) => void;
+  // 소리 내어 읽기. 없으면(undefined) 브라우저의 speechSynthesis를 쓰고, null이면 쓸 수 없는 것으로 본다.
+  speech?: SpeechBackend | null;
 }
 
 const EnvContext = createContext<ReaderEnv | null>(null);

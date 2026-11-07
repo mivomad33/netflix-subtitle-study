@@ -197,6 +197,7 @@ body {
 .nfr-book-open:focus-visible,
 .nfr-check input:focus-visible,
 .nfr-chapter-check:focus-visible,
+.nfr-read-from:focus-visible,
 .nfr-select:focus-visible {
   outline: 2px solid var(--nfr-primary);
   outline-offset: 2px;
@@ -233,6 +234,7 @@ body {
 }
 
 .nfr-check input {
+  font-size: 13px;
   width: 24px;
   height: 24px;
   margin: 0;
@@ -543,8 +545,9 @@ body {
 
 .nfr-chapter-check {
   flex: none;
-  width: 18px;
-  height: 18px;
+  font-size: 13px;
+  width: 24px;
+  height: 24px;
   margin: 0 4px;
   accent-color: var(--nfr-on-strong);
   cursor: pointer;
@@ -593,10 +596,116 @@ body {
   opacity: 1;
 }
 
+/* 소리 내어 읽기 도구. 읽는 동안 보이도록 본문 위에 붙어 있다. */
+.nfr-read-sticky {
+  position: sticky;
+  top: var(--nfr-header-height);
+  z-index: 5;
+  margin: 12px -32px 0;
+  padding: 10px 32px;
+  background: var(--nfr-surface);
+  border-bottom: 1px solid var(--nfr-border);
+}
+
+.nfr-read-bar {
+  display: grid;
+  gap: 8px;
+}
+
+.nfr-read-bar > .nfr-muted,
+.nfr-read-bar > .nfr-error {
+  margin: 0;
+}
+
+.nfr-read-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.nfr-read-row .nfr-select {
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.nfr-voice-label .nfr-select {
+  max-width: 220px;
+}
+
+.nfr-btn-pressed {
+  background: var(--nfr-surface-pressed);
+  border-color: var(--nfr-border-hover);
+}
+
+.nfr-read-notice {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--nfr-text-button);
+}
+
+.nfr-read-settings {
+  padding: 10px 12px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius);
+  background: var(--nfr-surface-soft);
+}
+
+.nfr-read-settings-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--nfr-text-muted);
+}
+
+/* 문단마다 "여기서부터 읽기". 문단에 마우스를 올리거나 포커스하면 보인다. */
+.nfr-read-from {
+  position: absolute;
+  top: 0.15em;
+  left: -30px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nfr-text-muted);
+  font-size: 13px;
+  line-height: 24px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.nfr-paragraph:hover .nfr-read-from,
+.nfr-read-from:focus-visible {
+  opacity: 1;
+}
+
+.nfr-read-from:hover {
+  background: var(--nfr-surface-pressed);
+  color: var(--nfr-text);
+}
+
+/* 읽는 문장. 하이라이트 안에서는 아래쪽 띠로 그려 하이라이트 색을 가리지 않는다. */
+.nfr-paragraph .current-sentence {
+  background: var(--nfr-current);
+  border-radius: 2px;
+}
+
+.nfr-paragraph mark .current-sentence {
+  background: linear-gradient(var(--nfr-current), var(--nfr-current)) left bottom / 100% 40% no-repeat;
+}
+
+.nfr-paragraphs.reading [data-si] {
+  cursor: pointer;
+}
+
 /* 본문 끝: 학습 완료와 다음 장 */
 .nfr-chapter-end {
-  max-width: 70ch;
-  margin: 24px auto 0;
+  margin: 24px 0 0;
   padding-top: 16px;
   border-top: 1px solid var(--nfr-border);
 }

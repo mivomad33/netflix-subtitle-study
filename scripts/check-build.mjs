@@ -7,6 +7,12 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const SHIM_MARKER = 'NF_STUDY_DEV_STORAGE_SHIM';
+// 개발 화면·테스트용 가짜 음성(src/pages/Reader/dev/fakeSpeech.ts)
+export const FAKE_SPEECH_MARKER = 'NF_STUDY_FAKE_SPEECH';
+const DEV_MARKERS = [
+  [SHIM_MARKER, '개발용 대체 저장소 표시'],
+  [FAKE_SPEECH_MARKER, '개발용 가짜 음성 표시'],
+];
 export const EXTENSION_PAGES = ['reader.html', 'popup.html'];
 const EXPECTED_PERMISSIONS = ['storage', 'unlimitedStorage'];
 
@@ -139,10 +145,12 @@ function walk(dir) {
 /** @param {string} buildDir */
 export function checkShimMarker(buildDir) {
   if (!existsSync(buildDir)) return [];
-  const marker = Buffer.from(SHIM_MARKER);
-  return walk(buildDir)
-    .filter((file) => readFileSync(file).includes(marker))
-    .map((file) => `${relative(buildDir, file)}: 개발용 대체 저장소 표시 ${SHIM_MARKER} 포함`);
+  return walk(buildDir).flatMap((file) => {
+    const content = readFileSync(file);
+    return DEV_MARKERS.filter(([marker]) => content.includes(Buffer.from(marker))).map(
+      ([marker, label]) => `${relative(buildDir, file)}: ${label} ${marker} 포함`
+    );
+  });
 }
 
 /** @param {string[]} files paths from `git ls-files` */

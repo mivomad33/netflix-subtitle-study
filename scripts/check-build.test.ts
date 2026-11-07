@@ -195,6 +195,11 @@ describe('checkShimMarker', () => {
   it('is clean for a normal build', () => {
     expect(checkShimMarker(dir)).toEqual([]);
   });
+
+  it('4.6-3 flags the fake speech marker too', () => {
+    write('reader.bundle.js', 'const m = "NF_STUDY_FAKE_SPEECH";');
+    expect(checkShimMarker(dir).join('\n')).toMatch(/reader\.bundle\.js.*NF_STUDY_FAKE_SPEECH/);
+  });
 });
 
 describe('checkTrackedFiles', () => {

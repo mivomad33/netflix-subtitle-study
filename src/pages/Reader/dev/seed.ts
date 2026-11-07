@@ -1,7 +1,7 @@
 import { Memo } from '../../../shared/memo/types';
 import { StorageArea } from '../../../shared/storage/storageArea';
 import { KEY } from '../../../shared/storage/keys';
-import { saveBook, setPosition } from '../../../shared/storage/repo';
+import { saveBook, setChapterDone, setPosition } from '../../../shared/storage/repo';
 
 // 개발 화면용 테스트 데이터. 글은 모두 직접 쓴 문장이다(실제 원서·자막·메모를 넣지 않는다, 4.9-1).
 
@@ -92,7 +92,18 @@ export async function seedDemo(area: StorageArea) {
     { id: 'demo-empty', title: 'Short Notes', author: '', createdAt: now - 1000, updatedAt: now - 1000 },
     [{ id: 'ch1', title: '본문', paragraphs: ['A small book with a single paragraph and no memos yet.'] }]
   );
+  await saveBook(
+    area,
+    { id: 'demo-garden', title: 'Garden Letters', author: 'Test Author', createdAt: now - 2000, updatedAt: now - 2000 },
+    [
+      { id: 'ch1', title: 'Spring', paragraphs: ['The first letter was about seeds. She planted beans along the fence and hoped for rain.'] },
+      { id: 'ch2', title: 'Summer', paragraphs: ['By July the beans had climbed over the gate. Nobody could open it without a basket.'] },
+    ]
+  );
   await setPosition(area, { bookId: 'demo-lighthouse', chapterId: 'ch2', paragraphIndex: 1, updatedAt: now });
+  // 학습 완료: 등대 책은 일부, 짧은 책은 전부, 정원 책은 없음(4.6-3)
+  await setChapterDone(area, 'demo-lighthouse', 'ch1', true, now);
+  await setChapterDone(area, 'demo-empty', 'ch1', true, now);
   const memos: Memo[] = [
     memo({
       id: 'demo-m1', kind: 'book', sourceId: 'demo-lighthouse', chapterId: 'ch1', paragraphIndex: 0,
