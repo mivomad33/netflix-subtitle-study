@@ -2,8 +2,15 @@
   "manifest_version": 3,
   "name": "netflix-subtitle-study",
   "description": "A Chrome extension for studying languages with Netflix subtitles",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3UWwsUmi8APon7LpZkNdIglmgHUqq6YPc6hOnjT9ZJSeOkf0Qst6l/Sw2m9Mq2kJXdXtLZ5bd7IzSPj3bMIisFGRwFkdB5nMDz0I6AoI1GifuzE0Su3rSSO2ws6z8tQDLnH60TVuudLsCRInp5XMDhsFrjwHVS2B/8P0BwJDhz+EhX0Jx7SZRcmom/CfXIT2RdmecdoGDCD1EtnUNcisMHxvapAWc9doaxDk3n3zdlZP2QH5aNwfCtulWNn4Dt0Ulv8b7F6ZuI+NJAuDP2SWB/24fMP6wOm8043kA7ZuEni8ZevU/J0+JfQMFi2zLto3yoAnDKV3T1LcyrRG1nBLUQIDAQAB",
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
   "options_page": "options.html",
-  "background": { "service_worker": "background.bundle.js" },
+  "background": {
+    "service_worker": "background.bundle.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": "icon-34.png"
@@ -13,16 +20,29 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.netflix.com/*"],
-      "js": ["contentLoader.bundle.js"],
-      "css": ["content.styles.css"]
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "js": [
+        "contentLoader.bundle.js"
+      ],
+      "css": [
+        "content.styles.css"
+      ]
     }
   ],
   "devtools_page": "devtools.html",
   "web_accessible_resources": [
     {
-      "resources": ["content.styles.css", "icon-128.png", "icon-34.png", "contentScript.bundle.js"],
-      "matches": ["https://www.netflix.com/*"]
+      "resources": [
+        "content.styles.css",
+        "icon-128.png",
+        "icon-34.png",
+        "contentScript.bundle.js"
+      ],
+      "matches": [
+        "https://www.netflix.com/*"
+      ]
     }
   ]
 }

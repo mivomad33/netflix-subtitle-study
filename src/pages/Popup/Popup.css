@@ -1,45 +1,64 @@
-.App {
-  position: absolute;
-  top: 0px;
-  bottom: 0px;
-  left: 0px;
-  right: 0px;
-  text-align: center;
-  height: 100%;
-  padding: 10px;
-  background-color: #282c34;
+/* 디자인 기준(docs/design.md)의 종이색 바탕과 버튼 */
+body {
+  margin: 0;
+  width: 260px;
+  background: #faebd7;
+  color: #000;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial,
+    sans-serif;
 }
 
-.App-logo {
-  height: 30vmin;
-  pointer-events: none;
+.popup {
+  padding: 16px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.popup-title {
+  margin: 0 0 6px;
+  font-size: 16px;
 }
 
-.App-header {
-  height: 100%;
+.popup-desc {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #666;
+}
+
+.popup-actions {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  gap: 8px;
 }
 
-.App-link {
-  color: #61dafb;
+.popup-button {
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 14px;
+  color: #333;
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.popup-button:hover {
+  background: #f0f0f0;
+  border-color: #ccc;
+}
+
+.popup-button-primary {
+  color: #fff;
+  background: #e50914;
+  border-color: #e50914;
+}
+
+.popup-button-primary:hover {
+  background: #b80710;
+  border-color: #b80710;
+}
+
+.popup-button:focus-visible {
+  outline: 2px solid #1f2937;
+  outline-offset: 2px;
 }

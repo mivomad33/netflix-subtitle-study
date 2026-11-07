@@ -1,0 +1,119 @@
+import React, { useEffect, useState } from 'react';
+import { BookMeta, ReadingPosition } from '../../../shared/memo/types';
+import { deleteBook, listBooks, listMemos, listPositions } from '../../../shared/storage/repo';
+import { useReaderEnv } from '../env';
+import { Route } from '../route';
+
+interface Row {
+  book: BookMeta;
+  position: ReadingPosition | null;
+  memoCount: number;
+}
+
+// 진도: 지금 읽는 장 번호 / 전체 장 수
+export function progressLabel(book: BookMeta, position: ReadingPosition | null): string {
+  const total = book.chapters.length;
+  const index = position ? book.chapters.findIndex((c) => c.id === position.chapterId) : -1;
+  return index >= 0 ? `${index + 1}/${total}장` : `0/${total}장 · 아직 읽지 않음`;
+}
+
+export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navigate }) => {
+  const { area } = useReaderEnv();
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      const [books, positions, memos] = await Promise.all([
+        listBooks(area),
+        listPositions(area),
+        listMemos(area),
+      ]);
+      setRows(
+        books.map((book) => ({
+          book,
+          position: positions.find((p) => p.bookId === book.id) ?? null,
+          memoCount: memos.filter((m) => m.kind === 'book' && m.sourceId === book.id).length,
+        }))
+      );
+    } catch (e) {
+      console.error('[NF-STUDY] Failed to load books:', e);
+      setError('책 목록을 불러오지 못했습니다. 화면을 새로 고쳐 주세요.');
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [area]);
+
+  const handleDelete = async (row: Row) => {
+    if (
+      !window.confirm(
+        `「${row.book.title}」 책과 메모 ${row.memoCount}개가 지워집니다. 되돌릴 수 없습니다. 지울까요?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteBook(area, row.book.id);
+      await load();
+    } catch (e) {
+      console.error('[NF-STUDY] Failed to delete book:', e);
+      setError('책을 지우지 못했습니다. 다시 시도해 주세요.');
+    }
+  };
+
+  return (
+    <section className="nfr-page" aria-labelledby="book-list-title">
+      <div className="nfr-page-header">
+        <h1 id="book-list-title">책 목록</h1>
+        <button type="button" className="nfr-btn nfr-btn-primary" onClick={() => navigate({ name: 'import' })}>
+          책 등록
+        </button>
+      </div>
+      {error && (
+        <p className="nfr-error" role="alert">
+          {error}
+        </p>
+      )}
+      {rows === null && !error && <p className="nfr-muted">불러오는 중입니다…</p>}
+      {rows && rows.length === 0 && (
+        <div className="nfr-empty">
+          <p>아직 등록한 책이 없습니다.</p>
+          <p className="nfr-muted">
+            "책 등록"을 눌러 원서 본문을 붙여 넣으세요. 장 제목을 찾아 자동으로 나눠 드립니다.
+          </p>
+        </div>
+      )}
+      {rows && rows.length > 0 && (
+        <ul className="nfr-book-list">
+          {rows.map((row) => (
+            <li key={row.book.id} className="nfr-card nfr-book-row">
+              <button
+                type="button"
+                className="nfr-book-open"
+                onClick={() => navigate({ name: 'book', bookId: row.book.id })}
+              >
+                <span className="nfr-book-title">{row.book.title}</span>
+                {row.book.author && <span className="nfr-muted">{row.book.author}</span>}
+                <span className="nfr-book-meta">
+                  <span>{progressLabel(row.book, row.position)}</span>
+                  <span>메모 {row.memoCount}개</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="nfr-btn nfr-btn-danger"
+                onClick={() => handleDelete(row)}
+                aria-label={`「${row.book.title}」 지우기`}
+              >
+                지우기
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};

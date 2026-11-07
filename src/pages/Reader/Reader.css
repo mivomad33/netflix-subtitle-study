@@ -1,0 +1,751 @@
+/* 원서 리더·모아 보기. 값은 docs/design.md를 따르고 여기 한곳에 둔다. */
+:root {
+  --nfr-paper: #faebd7;
+  --nfr-surface: #ffffff;
+  --nfr-surface-soft: #f9f9f9;
+  --nfr-surface-pressed: #f0f0f0;
+  --nfr-border: #ddd;
+  --nfr-border-hover: #ccc;
+  --nfr-text: #000;
+  --nfr-text-button: #333;
+  --nfr-text-muted: #666;
+  --nfr-primary: #e50914;
+  --nfr-primary-hover: #b80710;
+  --nfr-on: #10b981;
+  --nfr-on-hover: #059669;
+  --nfr-current: #c9e3ff;
+  --nfr-danger: #b91c1c;
+  --nfr-danger-border: #fca5a5;
+  --nfr-danger-bg: #fef2f2;
+  --nfr-note: #d97706;
+  --nfr-note-strong: #b45309;
+  --nfr-note-bg: #fffbea;
+  --nfr-note-border: #f5d77a;
+  --nfr-font: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --nfr-radius-small: 4px;
+  --nfr-radius: 8px;
+  --nfr-header-height: 56px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--nfr-paper);
+  color: var(--nfr-text);
+  font-family: var(--nfr-font);
+  font-size: 14px;
+}
+
+.nfr-app {
+  min-height: 100vh;
+}
+
+/* 머리글 */
+.nfr-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--nfr-header-height);
+  padding: 8px 24px;
+  background: var(--nfr-paper);
+  border-bottom: 1px solid var(--nfr-border);
+}
+
+.nfr-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.nfr-nav-link {
+  padding: 8px 16px;
+  border-radius: var(--nfr-radius-small);
+  color: var(--nfr-text-button);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.nfr-nav-link:hover {
+  background: var(--nfr-surface-pressed);
+}
+
+.nfr-nav-link.active {
+  background: var(--nfr-primary);
+  color: #fff;
+}
+
+.nfr-backup {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.nfr-backup-message {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(420px, 80vw);
+  padding: 10px 12px;
+  border-radius: var(--nfr-radius);
+  background: var(--nfr-surface);
+  border: 1px solid var(--nfr-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.nfr-backup-message.error {
+  color: var(--nfr-danger);
+  border-color: var(--nfr-danger-border);
+  background: var(--nfr-danger-bg);
+}
+
+.nfr-main {
+  padding: 24px;
+}
+
+/* 버튼과 입력칸 */
+.nfr-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-surface-soft);
+  color: var(--nfr-text-button);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.nfr-btn:hover:not(:disabled) {
+  background: var(--nfr-surface-pressed);
+  border-color: var(--nfr-border-hover);
+}
+
+.nfr-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.nfr-btn-primary {
+  background: var(--nfr-primary);
+  border-color: var(--nfr-primary);
+  color: #fff;
+}
+
+.nfr-btn-primary:hover:not(:disabled) {
+  background: var(--nfr-primary-hover);
+  border-color: var(--nfr-primary-hover);
+}
+
+.nfr-btn-danger {
+  background: var(--nfr-surface);
+  border-color: var(--nfr-danger-border);
+  color: var(--nfr-danger);
+}
+
+.nfr-btn-danger:hover:not(:disabled) {
+  background: var(--nfr-danger-bg);
+  border-color: var(--nfr-danger-border);
+}
+
+.nfr-btn-small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.nfr-icon-btn {
+  margin-left: auto;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nfr-btn:focus-visible,
+.nfr-nav-link:focus-visible,
+.nfr-icon-btn:focus-visible,
+.nfr-chapter-btn:focus-visible,
+.nfr-memo-mini:focus-visible,
+.nfr-book-open:focus-visible,
+.nfr-check input:focus-visible {
+  outline: 2px solid var(--nfr-primary);
+  outline-offset: 2px;
+}
+
+.nfr-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-surface);
+  color: var(--nfr-text);
+  font: inherit;
+}
+
+.nfr-input:focus {
+  outline: none;
+  border-color: var(--nfr-text-muted);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
+}
+
+.nfr-input[aria-invalid='true'] {
+  border-color: var(--nfr-danger);
+}
+
+.nfr-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--nfr-text-button);
+  cursor: pointer;
+}
+
+.nfr-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.nfr-spacer {
+  flex: 1;
+}
+
+.nfr-muted {
+  color: var(--nfr-text-muted);
+  font-size: 13px;
+}
+
+.nfr-error,
+.nfr-field-error {
+  color: var(--nfr-danger);
+  font-size: 13px;
+}
+
+.nfr-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--nfr-danger-bg);
+  border: 1px solid var(--nfr-danger-border);
+  color: var(--nfr-danger);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.nfr-card {
+  background: var(--nfr-surface);
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius);
+  padding: 15px;
+}
+
+.nfr-empty {
+  padding: 40px 16px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* 쪽 공통 */
+.nfr-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.nfr-page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.nfr-page-header h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.nfr-page-header .nfr-btn:last-child {
+  margin-left: auto;
+}
+
+/* 책 목록 */
+.nfr-book-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nfr-book-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nfr-book-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+  border: none;
+  border-radius: var(--nfr-radius-small);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nfr-book-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.nfr-book-meta {
+  display: flex;
+  gap: 12px;
+  color: var(--nfr-text-muted);
+  font-size: 13px;
+}
+
+/* 책 등록 */
+.nfr-import-form {
+  display: grid;
+  gap: 12px;
+}
+
+.nfr-field-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+.nfr-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nfr-text-button);
+}
+
+.nfr-import-body {
+  min-height: 240px;
+  resize: vertical;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.nfr-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.nfr-busy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--nfr-text-button);
+}
+
+.nfr-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--nfr-border);
+  border-top-color: var(--nfr-primary);
+  border-radius: 50%;
+  animation: nfr-spin 0.8s linear infinite;
+}
+
+@keyframes nfr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.nfr-preview {
+  margin-top: 24px;
+}
+
+.nfr-preview h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.nfr-preview-list {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nfr-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.nfr-preview-name {
+  flex: 1 1 240px;
+  font-weight: 600;
+}
+
+.nfr-preview-first {
+  margin: 10px 0 0;
+  color: var(--nfr-text-muted);
+  line-height: 1.6;
+}
+
+.nfr-preview-paragraphs {
+  display: grid;
+  gap: 6px;
+  max-height: 480px;
+  overflow-y: auto;
+  margin: 12px 0 0;
+  padding: 0 4px 0 0;
+  list-style: none;
+}
+
+.nfr-preview-paragraphs li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--nfr-surface-pressed);
+  line-height: 1.6;
+}
+
+.nfr-preview-paragraph {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 원서 리더 */
+.nfr-reader {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  gap: 24px;
+  align-items: start;
+}
+
+.nfr-chapters,
+.nfr-chapter-memos {
+  position: sticky;
+  top: calc(var(--nfr-header-height) + 24px);
+  max-height: calc(100vh - var(--nfr-header-height) - 48px);
+  overflow-y: auto;
+}
+
+.nfr-reader-book-title {
+  margin: 12px 0 4px;
+  font-size: 18px;
+}
+
+.nfr-chapter-list {
+  display: grid;
+  gap: 2px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nfr-chapter-btn {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--nfr-radius-small);
+  background: transparent;
+  color: var(--nfr-text-button);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nfr-chapter-btn:hover {
+  background: var(--nfr-surface-pressed);
+}
+
+.nfr-chapter-btn.active {
+  background: var(--nfr-primary);
+  color: #fff;
+}
+
+.nfr-chapter-num {
+  min-width: 1.5em;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.nfr-chapter-name {
+  overflow-wrap: anywhere;
+}
+
+.nfr-article {
+  min-width: 0;
+  padding: 24px 32px 48px;
+  background: var(--nfr-surface);
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius);
+}
+
+.nfr-article-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nfr-font-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nfr-font-size {
+  min-width: 3em;
+  text-align: center;
+  font-size: 13px;
+  color: var(--nfr-text-button);
+}
+
+.nfr-chapter-title {
+  margin: 16px 0 8px;
+  font-size: 22px;
+}
+
+.nfr-paragraphs {
+  max-width: 70ch;
+  margin: 0 auto;
+  line-height: 1.75;
+}
+
+.nfr-paragraph {
+  position: relative;
+  scroll-margin-top: calc(var(--nfr-header-height) + 16px);
+}
+
+.nfr-paragraph p {
+  margin: 0 0 1em;
+}
+
+.nfr-paragraph .annotation-editor {
+  margin-bottom: 1em;
+  font-size: 14px;
+}
+
+.nfr-chapter-memos h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.nfr-memo-mini-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nfr-memo-mini {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nfr-memo-mini:hover {
+  border-color: var(--nfr-border-hover);
+}
+
+.nfr-memo-mini.active {
+  border-color: var(--nfr-note);
+  background: var(--nfr-note-bg);
+}
+
+.nfr-memo-mini[aria-disabled='true'] {
+  cursor: default;
+}
+
+.nfr-memo-mini-quote {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.nfr-memo-mini-note {
+  color: var(--nfr-text-muted);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* 모아 보기 */
+.nfr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.nfr-search {
+  flex: 1 1 320px;
+}
+
+.nfr-select-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--nfr-text-button);
+}
+
+.nfr-select {
+  width: auto;
+  max-width: 260px;
+}
+
+.nfr-memo-list {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nfr-memo-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.nfr-kind {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.nfr-kind.netflix {
+  background: var(--nfr-primary);
+}
+
+.nfr-kind.book {
+  background: var(--nfr-on-hover);
+}
+
+.nfr-memo-source {
+  color: var(--nfr-text-button);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.nfr-memo-quote {
+  margin: 10px 0 4px;
+  padding-left: 10px;
+  border-left: 3px solid var(--nfr-note);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.nfr-memo-note {
+  margin: 4px 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.nfr-memo-context {
+  margin: 8px 0;
+  color: var(--nfr-text-muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.nfr-static-mark {
+  cursor: default;
+}
+
+.nfr-memo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nfr-memo-card .annotation-editor {
+  margin-top: 10px;
+}
+
+.nfr-more {
+  display: block;
+  margin: 16px auto 0;
+}
+
+/* 창을 좁히면 메모 목록을 본문 아래로, 장 목록을 위로 내린다. */
+@media (max-width: 1180px) {
+  .nfr-reader {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .nfr-chapter-memos {
+    grid-column: 2;
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .nfr-reader {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nfr-chapters,
+  .nfr-chapter-memos {
+    grid-column: 1;
+    position: static;
+    max-height: none;
+  }
+
+  .nfr-field-row {
+    grid-template-columns: 1fr;
+  }
+}

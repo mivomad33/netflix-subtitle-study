@@ -40,7 +40,12 @@ var options = {
   entry: {
     newtab: path.join(__dirname, 'src', 'pages', 'Newtab', 'index.jsx'),
     options: path.join(__dirname, 'src', 'pages', 'Options', 'index.jsx'),
-    popup: path.join(__dirname, 'src', 'pages', 'Popup', 'index.jsx'),
+    popup: path.join(__dirname, 'src', 'pages', 'Popup', 'index.tsx'),
+    reader: path.join(__dirname, 'src', 'pages', 'Reader', 'index.tsx'),
+    // 개발 서버에서만: chrome.* 대신 메모리 저장소로 원서 리더를 띄운다(4.10-2).
+    ...(isDevelopment
+      ? { readerDev: path.join(__dirname, 'src', 'pages', 'Reader', 'dev.tsx') }
+      : {}),
     background: path.join(__dirname, 'src', 'pages', 'Background', 'index.ts'),
     contentScript: path.join(__dirname, 'src', 'pages', 'Content', 'index.tsx'),
     contentLoader: path.join(
@@ -209,6 +214,19 @@ var options = {
       chunks: ['popup'],
       cache: false,
     }),
+    new HtmlWebpackPlugin({
+      template: path.join(__dirname, 'src', 'pages', 'Reader', 'index.html'),
+      filename: 'reader.html',
+      chunks: ['reader'],
+      cache: false,
+    }),
+    isDevelopment &&
+      new HtmlWebpackPlugin({
+        template: path.join(__dirname, 'src', 'pages', 'Reader', 'index.html'),
+        filename: 'reader-dev.html',
+        chunks: ['readerDev'],
+        cache: false,
+      }),
     new HtmlWebpackPlugin({
       template: path.join(__dirname, 'src', 'pages', 'Devtools', 'index.html'),
       filename: 'devtools.html',
