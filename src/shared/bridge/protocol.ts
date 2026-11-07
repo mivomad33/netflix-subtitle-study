@@ -8,6 +8,16 @@ export const BRIDGE_RESPONSE = 'NF_STUDY_STORE_RESPONSE';
 
 export type ExtensionPage = 'reader' | 'memos';
 
+export const isExtensionPage = (value: unknown): value is ExtensionPage =>
+  value === 'reader' || value === 'memos';
+
+// 확장 프로그램 페이지 주소(chrome.runtime.getURL에 넘긴다).
+export const extensionPagePath = (page: ExtensionPage) =>
+  page === 'memos' ? 'reader.html#/memos' : 'reader.html#/';
+
+// content script가 background에 탭을 열어 달라고 보내는 메시지 종류.
+export const OPEN_PAGE_MESSAGE = 'NF_STUDY_OPEN_PAGE';
+
 export type BridgeCall =
   | { op: 'memos.list'; videoId: string }
   | { op: 'memos.put'; memo: Memo }
@@ -52,7 +62,7 @@ export function parseBridgeRequest(data: unknown): BridgeRequest | null {
     case 'legacy.migrate':
       return isLegacyPayload(d.payload) ? (d as unknown as BridgeRequest) : null;
     case 'page.open':
-      return d.page === 'reader' || d.page === 'memos' ? (d as unknown as BridgeRequest) : null;
+      return isExtensionPage(d.page) ? (d as unknown as BridgeRequest) : null;
     default:
       return null;
   }

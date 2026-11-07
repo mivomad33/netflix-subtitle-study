@@ -1,4 +1,5 @@
 import { Memo, isValidMemo } from '../memo/types';
+import { memoMatchesText } from '../memo/annotate';
 import { KEY, isMemoKey } from './keys';
 import { StorageArea } from './storageArea';
 
@@ -67,7 +68,7 @@ const toMemo = (
       if (typeof video.epSeq === 'number') memo.episodeSeq = video.epSeq;
     }
   }
-  return isValidMemo(memo) && memo.contextText.slice(memo.start, memo.end) === memo.quote
+  return isValidMemo(memo) && memoMatchesText(memo, memo.contextText)
     ? memo
     : null;
 };

@@ -111,6 +111,11 @@ export function isValidPosition(value: unknown): value is ReadingPosition {
   );
 }
 
+export const isValidReaderSettings = (value: unknown): value is ReaderSettings => {
+  const fontSize = (value as Partial<ReaderSettings> | null)?.fontSize;
+  return typeof fontSize === 'number' && fontSize >= 8 && fontSize <= 40;
+};
+
 export function createId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }

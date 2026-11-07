@@ -25,6 +25,7 @@ const MIN_FONT = 10;
 const MAX_FONT = 28;
 const HEADER_OFFSET = 72; // 위쪽 고정 머리글 높이. 이보다 아래에 걸친 첫 문단을 읽는 위치로 본다.
 const POSITION_SAVE_DELAY = 400;
+const NO_MEMOS: Memo[] = [];
 
 interface Props {
   bookId: string;
@@ -109,6 +110,13 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     };
   }, [area, bookId, chapterId]);
 
+  // 메모의 하이라이트로 스크롤한다. 본문에 그려져 있지 않으면 false.
+  const scrollToMemo = (memoId: string) => {
+    const mark = articleRef.current?.querySelector(`mark[data-memo-id="${CSS.escape(memoId)}"]`);
+    mark?.scrollIntoView({ block: 'center' });
+    return !!mark;
+  };
+
   // 본문이 그려지면 읽던 문단이나 고른 메모로 스크롤한다.
   useLayoutEffect(() => {
     const target = scrollTarget.current;
@@ -116,30 +124,26 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     if (!paragraphs || !target || !container) return;
     scrollTarget.current = null;
     if (target.kind === 'memo') {
-      const mark = container.querySelector(`mark[data-memo-id="${CSS.escape(target.memoId)}"]`);
-      if (mark) {
-        mark.scrollIntoView({ block: 'center' });
-        setEditingId(target.memoId);
-      }
+      if (scrollToMemo(target.memoId)) setEditingId(target.memoId);
     } else {
       container
         .querySelector(`[data-paragraph-index="${target.index}"]`)
         ?.scrollIntoView({ block: 'start' });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paragraphs]);
 
   const savePosition = useCallback(
-    (index: number) => {
-      if (!chapterId) return;
-      const position: ReadingPosition = { bookId, chapterId, paragraphIndex: index, updatedAt: Date.now() };
+    (chapter: string, index: number) => {
+      const position: ReadingPosition = { bookId, chapterId: chapter, paragraphIndex: index, updatedAt: Date.now() };
       setPosition(area, position).catch((e) => console.error('[NF-STUDY] Failed to save position:', e));
     },
-    [area, bookId, chapterId]
+    [area, bookId]
   );
 
   // 스크롤하면 화면 맨 위에 걸친 문단을 읽는 위치로 저장한다.
   useEffect(() => {
-    if (!paragraphs) return;
+    if (!paragraphs || !chapterId) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const handleScroll = () => {
       if (timer) clearTimeout(timer);
@@ -147,7 +151,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
         const elements = articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph-index]');
         if (!elements) return;
         const visible = Array.from(elements).find((el) => el.getBoundingClientRect().bottom > HEADER_OFFSET);
-        if (visible) savePosition(Number(visible.dataset.paragraphIndex));
+        if (visible) savePosition(chapterId, Number(visible.dataset.paragraphIndex));
       }, POSITION_SAVE_DELAY);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -155,15 +159,14 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
       window.removeEventListener('scroll', handleScroll);
       if (timer) clearTimeout(timer);
     };
-  }, [paragraphs, savePosition]);
+  }, [chapterId, paragraphs, savePosition]);
 
   const openChapter = (id: string) => {
     if (id === chapterId) return;
     setEditingId(null);
     setChapterId(id);
     window.scrollTo?.({ top: 0 });
-    const position: ReadingPosition = { bookId, chapterId: id, paragraphIndex: 0, updatedAt: Date.now() };
-    setPosition(area, position).catch((e) => console.error('[NF-STUDY] Failed to save position:', e));
+    savePosition(id, 0);
   };
 
   const save = useCallback(
@@ -178,10 +181,23 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     [area]
   );
 
+  // 문단마다 그릴 메모. 렌더할 때마다 메모 전체를 문단 수만큼 훑지 않게 장이나 메모가 바뀔 때만 만든다.
+  const memosByParagraph = useMemo(() => {
+    const map = new Map<number, Memo[]>();
+    if (!chapterId || !paragraphs) return map;
+    const indexes = new Set(
+      memos.filter((m) => m.chapterId === chapterId && m.paragraphIndex !== undefined).map((m) => m.paragraphIndex!)
+    );
+    indexes.forEach((index) => {
+      const text = paragraphs[index];
+      if (text !== undefined) map.set(index, memosForParagraph(memos, chapterId, index, text));
+    });
+    return map;
+  }, [chapterId, memos, paragraphs]);
+
   const paragraphMemos = useCallback(
-    (index: number) =>
-      chapterId && paragraphs ? memosForParagraph(memos, chapterId, index, paragraphs[index]) : [],
-    [chapterId, memos, paragraphs]
+    (index: number) => memosByParagraph.get(index) ?? NO_MEMOS,
+    [memosByParagraph]
   );
 
   const resolveTarget = useCallback(
@@ -250,9 +266,8 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
 
   const focusMemo = (memo: Memo) => {
     setEditingId(memo.id);
-    const mark = articleRef.current?.querySelector(`mark[data-memo-id="${CSS.escape(memo.id)}"]`);
-    mark?.scrollIntoView({ block: 'center' });
-    if (memo.paragraphIndex !== undefined) savePosition(memo.paragraphIndex);
+    scrollToMemo(memo.id);
+    if (memo.chapterId && memo.paragraphIndex !== undefined) savePosition(memo.chapterId, memo.paragraphIndex);
   };
 
   const chapterMemos = useMemo(

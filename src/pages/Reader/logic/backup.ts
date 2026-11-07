@@ -1,10 +1,11 @@
 // 메모·책·읽기 위치·설정을 파일 하나로 내보내고, 다시 합쳐 넣는다.
 import { StorageArea } from '../../../shared/storage/storageArea';
-import { KEY, PREFIX } from '../../../shared/storage/keys';
+import { KEY, PREFIX, chapterKeyPrefix } from '../../../shared/storage/keys';
 import {
   isValidBookMeta,
   isValidMemo,
   isValidPosition,
+  isValidReaderSettings,
 } from '../../../shared/memo/types';
 
 export const BACKUP_FORMAT = 'nf-study-backup';
@@ -26,12 +27,7 @@ export type ParseResult =
   | { ok: true; backup: Backup; counts: BackupCounts }
   | { ok: false; error: string };
 
-const BACKUP_PREFIXES = [
-  PREFIX.memo,
-  PREFIX.book,
-  PREFIX.chapter,
-  PREFIX.position,
-];
+const BACKUP_PREFIXES = Object.values(PREFIX);
 
 const isBackupKey = (key: string) =>
   key === KEY.readerSettings || BACKUP_PREFIXES.some((p) => key.startsWith(p));
@@ -66,16 +62,10 @@ export async function exportBackup(area: StorageArea, now = new Date()) {
   };
 }
 
-const isSettings = (v: unknown) => {
-  if (!v || typeof v !== 'object') return false;
-  const fontSize = (v as Record<string, unknown>).fontSize;
-  return typeof fontSize === 'number' && fontSize >= 8 && fontSize <= 40;
-};
-
 // 키 하나의 값을 검사해, 틀리면 무엇이 틀렸는지 문장으로 돌려준다.
 function checkEntry(key: string, value: unknown): string | null {
   if (key === KEY.readerSettings) {
-    return isSettings(value) ? null : '리더 설정 값이 올바르지 않습니다.';
+    return isValidReaderSettings(value) ? null : '리더 설정 값이 올바르지 않습니다.';
   }
   if (key.startsWith(PREFIX.memo)) {
     return isValidMemo(value) && KEY.memo(value.id) === key
@@ -166,7 +156,9 @@ const updatedAtOf = (v: unknown) => (v as { updatedAt: number }).updatedAt;
 // 돌려주는 개수는 메모와 책만 센다.
 export async function mergeBackup(area: StorageArea, backup: Backup) {
   const fileKeys = Object.keys(backup.data);
-  const current = fileKeys.length > 0 ? await area.get(fileKeys) : {};
+  // 장 본문은 비교하지 않으므로 읽지 않는다.
+  const compared = fileKeys.filter((k) => !k.startsWith(PREFIX.chapter));
+  const current = compared.length > 0 ? await area.get(compared) : {};
   const items: Record<string, unknown> = {};
   const result = { added: 0, updated: 0, kept: 0 };
   const replacedBooks = new Set<string>();
@@ -195,9 +187,9 @@ export async function mergeBackup(area: StorageArea, backup: Backup) {
 
   // 본문은 파일의 책을 쓰기로 한 경우에만 함께 쓴다.
   for (const key of fileKeys) {
-    if (!key.startsWith(PREFIX.chapter)) continue;
-    const bookId = key.slice(PREFIX.chapter.length).split(':')[0];
-    if (replacedBooks.has(bookId)) items[key] = backup.data[key];
+    if (Array.from(replacedBooks).some((bookId) => key.startsWith(chapterKeyPrefix(bookId)))) {
+      items[key] = backup.data[key];
+    }
   }
 
   if (

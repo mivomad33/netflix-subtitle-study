@@ -1,8 +1,12 @@
-import { BRIDGE_RESPONSE, BridgeResponse, ExtensionPage, parseBridgeRequest } from '../../shared/bridge/protocol';
+import {
+  BRIDGE_RESPONSE,
+  BridgeResponse,
+  ExtensionPage,
+  parseBridgeRequest,
+} from '../../shared/bridge/protocol';
 import { handleBridgeRequest } from '../../shared/bridge/handler';
 import { StorageArea } from '../../shared/storage/storageArea';
 
-export const OPEN_PAGE_MESSAGE = 'NF_STUDY_OPEN_PAGE';
 
 // 넷플릭스 페이지 코드의 요청을 받아 공통 저장소에 반영하고 답을 돌려준다.
 export function installStoreBridge(

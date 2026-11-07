@@ -29,11 +29,16 @@ export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navig
         listPositions(area),
         listMemos(area),
       ]);
+      const positionByBook = new Map(positions.map((p) => [p.bookId, p]));
+      const memoCount = new Map<string, number>();
+      memos.forEach((m) => {
+        if (m.kind === 'book') memoCount.set(m.sourceId, (memoCount.get(m.sourceId) ?? 0) + 1);
+      });
       setRows(
         books.map((book) => ({
           book,
-          position: positions.find((p) => p.bookId === book.id) ?? null,
-          memoCount: memos.filter((m) => m.kind === 'book' && m.sourceId === book.id).length,
+          position: positionByBook.get(book.id) ?? null,
+          memoCount: memoCount.get(book.id) ?? 0,
         }))
       );
     } catch (e) {

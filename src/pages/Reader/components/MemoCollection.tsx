@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookMeta, Memo } from '../../../shared/memo/types';
-import { deleteMemo, getChapterParagraphs, listBooks, listMemos, putMemo } from '../../../shared/storage/repo';
+import { deleteMemo, listBooks, listMemos, putMemo } from '../../../shared/storage/repo';
+import { KEY } from '../../../shared/storage/keys';
 import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
@@ -10,8 +11,11 @@ import { isBookMemoAnchored } from '../logic/bookMemos';
 
 const PAGE_SIZE = 100;
 
+const videoLabel = (m: Memo) => m.videoTitle || `제목 없는 영상 (${m.sourceId})`;
+const chapterTextKey = (m: Memo) => KEY.chapter(m.sourceId, m.chapterId ?? '');
+
 export function netflixSourceLabel(m: Memo): string {
-  const title = m.videoTitle || `제목 없는 영상 (${m.sourceId})`;
+  const title = videoLabel(m);
   if (m.seasonSeq === undefined || m.episodeSeq === undefined) return title;
   return `${title} · 시즌 ${m.seasonSeq} ${m.episodeSeq}화${m.episodeTitle ? ` ${m.episodeTitle}` : ''}`;
 }
@@ -61,17 +65,11 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
     (async () => {
       try {
         const [loadedMemos, loadedBooks] = await Promise.all([listMemos(area), listBooks(area)]);
-        // 원서 메모가 아직 제자리를 찾는지 보려고, 메모가 붙은 장의 본문만 읽는다.
-        const needed = new Set(
-          loadedMemos.filter((m) => m.kind === 'book' && m.chapterId).map((m) => `${m.sourceId}\n${m.chapterId}`)
+        // 원서 메모가 아직 제자리를 찾는지 보려고, 메모가 붙은 장의 본문만 한 번에 읽는다.
+        const needed = Array.from(
+          new Set(loadedMemos.filter((m) => m.kind === 'book' && m.chapterId).map(chapterTextKey))
         );
-        const texts: Record<string, string[]> = {};
-        await Promise.all(
-          Array.from(needed).map(async (key) => {
-            const [bookId, chapterId] = key.split('\n');
-            texts[key] = await getChapterParagraphs(area, bookId, chapterId);
-          })
-        );
+        const texts = (needed.length > 0 ? await area.get(needed) : {}) as Record<string, string[]>;
         if (cancelled) return;
         setBooks(loadedBooks);
         setChapterTexts(texts);
@@ -102,7 +100,7 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
   const isAnchored = useCallback(
     (m: Memo) =>
       m.kind === 'netflix' ||
-      (booksById.has(m.sourceId) && isBookMemoAnchored(m, chapterTexts[`${m.sourceId}\n${m.chapterId}`])),
+      (booksById.has(m.sourceId) && isBookMemoAnchored(m, chapterTexts[chapterTextKey(m)])),
     [booksById, chapterTexts]
   );
 
@@ -117,7 +115,7 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
   const videos = useMemo(() => {
     const map = new Map<string, string>();
     memos?.forEach((m) => {
-      if (m.kind === 'netflix' && !map.has(m.sourceId)) map.set(m.sourceId, m.videoTitle || `제목 없는 영상 (${m.sourceId})`);
+      if (m.kind === 'netflix' && !map.has(m.sourceId)) map.set(m.sourceId, videoLabel(m));
     });
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [memos]);

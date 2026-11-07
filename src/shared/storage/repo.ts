@@ -8,8 +8,9 @@ import {
   isValidBookMeta,
   isValidMemo,
   isValidPosition,
+  isValidReaderSettings,
 } from '../memo/types';
-import { KEY, PREFIX } from './keys';
+import { KEY, PREFIX, chapterKeyPrefix } from './keys';
 import { StorageArea } from './storageArea';
 
 const keysWithPrefix = async (area: StorageArea, prefix: string) =>
@@ -111,7 +112,7 @@ export async function countBookMemos(area: StorageArea, bookId: string) {
 
 export async function deleteBook(area: StorageArea, bookId: string): Promise<void> {
   const keys = await area.getKeys();
-  const chapterPrefix = `${PREFIX.chapter}${bookId}:`;
+  const chapterPrefix = chapterKeyPrefix(bookId);
   const memos = await listMemosBySource(area, 'book', bookId);
   await area.remove([
     KEY.book(bookId),
@@ -143,14 +144,8 @@ export async function setPosition(area: StorageArea, position: ReadingPosition) 
 }
 
 export async function getReaderSettings(area: StorageArea): Promise<ReaderSettings> {
-  const value = (await area.get([KEY.readerSettings]))[KEY.readerSettings] as
-    | Partial<ReaderSettings>
-    | undefined;
-  const fontSize =
-    typeof value?.fontSize === 'number' && value.fontSize >= 8 && value.fontSize <= 40
-      ? value.fontSize
-      : DEFAULT_READER_SETTINGS.fontSize;
-  return { fontSize };
+  const value = (await area.get([KEY.readerSettings]))[KEY.readerSettings];
+  return { fontSize: isValidReaderSettings(value) ? value.fontSize : DEFAULT_READER_SETTINGS.fontSize };
 }
 
 export async function setReaderSettings(area: StorageArea, settings: ReaderSettings) {

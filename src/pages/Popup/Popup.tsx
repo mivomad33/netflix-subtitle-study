@@ -1,9 +1,10 @@
 import React from 'react';
+import { ExtensionPage, extensionPagePath } from '../../shared/bridge/protocol';
 import './Popup.css';
 
 // 확장 프로그램 아이콘을 누르면 뜨는 창. 원서 리더와 모아 보기를 새 탭으로 연다.
-function openPage(hash: string) {
-  chrome.tabs.create({ url: chrome.runtime.getURL(`reader.html#${hash}`) });
+function openPage(page: ExtensionPage) {
+  chrome.tabs.create({ url: chrome.runtime.getURL(extensionPagePath(page)) });
   window.close();
 }
 
@@ -17,14 +18,14 @@ const Popup = () => (
       <button
         type="button"
         className="popup-button popup-button-primary"
-        onClick={() => openPage('/')}
+        onClick={() => openPage('reader')}
       >
         원서 리더
       </button>
       <button
         type="button"
         className="popup-button"
-        onClick={() => openPage('/memos')}
+        onClick={() => openPage('memos')}
       >
         메모 모아 보기
       </button>

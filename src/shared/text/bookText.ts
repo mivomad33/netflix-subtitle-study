@@ -97,12 +97,17 @@ export function detectChapterStarts(paragraphs: string[]): number[] {
   return starts;
 }
 
+// 나눌 곳을 정리한다: 범위 안의 정수만, 겹치지 않게, 오름차순.
+export function normalizeChapterStarts(paragraphCount: number, starts: number[]): number[] {
+  return Array.from(
+    new Set(starts.filter((s) => Number.isInteger(s) && s >= 0 && s < paragraphCount)),
+  ).sort((a, b) => a - b);
+}
+
 export function splitIntoChapters(paragraphs: string[], starts: number[]): ChapterDraft[] {
   if (paragraphs.length === 0) return [];
 
-  const valid = Array.from(
-    new Set(starts.filter((s) => Number.isInteger(s) && s >= 0 && s < paragraphs.length)),
-  ).sort((a, b) => a - b);
+  const valid = normalizeChapterStarts(paragraphs.length, starts);
 
   if (valid.length === 0) return [{ title: '본문', paragraphs: paragraphs.slice() }];
 

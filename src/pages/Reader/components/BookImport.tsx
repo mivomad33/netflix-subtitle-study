@@ -1,7 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { createId } from '../../../shared/memo/types';
 import { saveBook } from '../../../shared/storage/repo';
-import { detectChapterStarts, splitIntoChapters, toParagraphs } from '../../../shared/text/bookText';
+import {
+  detectChapterStarts,
+  normalizeChapterStarts,
+  splitIntoChapters,
+  toParagraphs,
+} from '../../../shared/text/bookText';
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
 
@@ -24,7 +29,7 @@ export interface PreviewChapter {
 export function previewChapters(preview: Preview): PreviewChapter[] {
   const { paragraphs, starts, titles } = preview;
   const drafts = splitIntoChapters(paragraphs, starts);
-  const valid = Array.from(new Set(starts)).filter((s) => s >= 0 && s < paragraphs.length).sort((a, b) => a - b);
+  const valid = normalizeChapterStarts(paragraphs.length, starts);
   const keys = valid.length === 0 ? [0] : [...(valid[0] > 0 ? [0] : []), ...valid];
   return drafts.map((draft, i) => ({
     key: keys[i],

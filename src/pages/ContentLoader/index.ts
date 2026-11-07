@@ -1,5 +1,6 @@
 import { createChromeArea } from '../../shared/storage/storageArea';
-import { installStoreBridge, OPEN_PAGE_MESSAGE } from './storeBridge';
+import { installStoreBridge } from './storeBridge';
+import { OPEN_PAGE_MESSAGE } from '../../shared/bridge/protocol';
 
 console.log('[NF-STUDY] ContentLoader (index.ts) initialized. Injecting contentScript.bundle.js...');
 
