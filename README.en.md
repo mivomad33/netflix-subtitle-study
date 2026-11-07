@@ -57,6 +57,7 @@ Hotkeys are ignored while you type in an input field.
 
 | Key | Action | Description |
 | :-: | :-- | :-- |
+| `Space` | Play/pause | Plays or pauses the video even while the study panel has focus. A panel button you just clicked is not pressed again. |
 | `Q` | Toggle auto-pause | Pauses the video after every line. |
 | `R` | Toggle sentence loop | Repeats the current sentence. |
 | `T` | Toggle study panel | Shows or hides the panel on the right. |
