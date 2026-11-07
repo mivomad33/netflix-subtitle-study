@@ -13,6 +13,8 @@
   --nfr-primary-hover: #b80710;
   --nfr-on: #10b981;
   --nfr-on-hover: #059669;
+  --nfr-on-strong: #047857; /* 초록 위 흰 글(켜진 버튼). 흰 글 대비 4.5:1을 넘는다 */
+  --nfr-on-soft: #ecfdf5; /* 완료 안내 바탕 */
   --nfr-current: #c9e3ff;
   --nfr-danger: #b91c1c;
   --nfr-danger-border: #fca5a5;
@@ -148,6 +150,18 @@ body {
   border-color: var(--nfr-primary-hover);
 }
 
+.nfr-btn-on {
+  background: var(--nfr-on-strong);
+  border-color: var(--nfr-on-strong);
+  color: #fff;
+}
+
+.nfr-btn-on:hover:not(:disabled) {
+  background: var(--nfr-on-hover);
+  border-color: var(--nfr-on-hover);
+  color: #fff;
+}
+
 .nfr-btn-danger {
   background: var(--nfr-surface);
   border-color: var(--nfr-danger-border);
@@ -181,7 +195,9 @@ body {
 .nfr-chapter-btn:focus-visible,
 .nfr-memo-mini:focus-visible,
 .nfr-book-open:focus-visible,
-.nfr-check input:focus-visible {
+.nfr-check input:focus-visible,
+.nfr-chapter-check:focus-visible,
+.nfr-select:focus-visible {
   outline: 2px solid var(--nfr-primary);
   outline-offset: 2px;
 }
@@ -327,6 +343,48 @@ body {
   gap: 12px;
   color: var(--nfr-text-muted);
   font-size: 13px;
+}
+
+/* 학습 진행률 막대 */
+.nfr-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 13px;
+  color: var(--nfr-text-button);
+}
+
+.nfr-progress-track {
+  flex: 1;
+  min-width: 60px;
+  max-width: 240px;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--nfr-border);
+  border-radius: 999px;
+  background: var(--nfr-surface-soft);
+}
+
+.nfr-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--nfr-on);
+  transition: all 0.2s ease;
+}
+
+.nfr-progress-text {
+  white-space: nowrap;
+}
+
+.nfr-chapters .nfr-progress {
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.nfr-chapters .nfr-progress-track {
+  flex-basis: 100%;
+  max-width: none;
 }
 
 /* 책 등록 */
@@ -477,8 +535,25 @@ body {
   list-style: none;
 }
 
+.nfr-chapter-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nfr-chapter-check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 4px;
+  accent-color: var(--nfr-on-strong);
+  cursor: pointer;
+}
+
 .nfr-chapter-btn {
   display: flex;
+  flex: 1;
+  min-width: 0;
   width: 100%;
   gap: 8px;
   padding: 8px 10px;
@@ -505,6 +580,42 @@ body {
   min-width: 1.5em;
   color: inherit;
   opacity: 0.7;
+}
+
+.nfr-chapter-item.done .nfr-chapter-btn:not(.active) .nfr-chapter-num {
+  color: var(--nfr-on-strong);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.nfr-chapter-item.done .nfr-chapter-btn.active .nfr-chapter-num {
+  font-weight: 700;
+  opacity: 1;
+}
+
+/* 본문 끝: 학습 완료와 다음 장 */
+.nfr-chapter-end {
+  max-width: 70ch;
+  margin: 24px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--nfr-border);
+}
+
+.nfr-chapter-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nfr-done-note {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--nfr-on);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-on-soft);
+  color: var(--nfr-on-strong);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .nfr-chapter-name {

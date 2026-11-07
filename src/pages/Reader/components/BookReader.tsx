@@ -1,16 +1,22 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BookMeta, Memo, ReadingPosition, createId } from '../../../shared/memo/types';
+import { BookMeta, Memo, ReadingPosition, createId, isValidCompletion } from '../../../shared/memo/types';
 import {
   deleteMemo,
   getBook,
+  getBookCharCounts,
   getChapterParagraphs,
   getPosition,
   getReaderSettings,
+  listCompletions,
   listMemosBySource,
   putMemo,
+  setChapterDone,
   setPosition,
   updateReaderSettings,
 } from '../../../shared/storage/repo';
+import { completionKeyPrefix } from '../../../shared/storage/keys';
+import { bookProgress } from '../logic/progress';
+import { ProgressBar } from './ProgressBar';
 import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
 import {
   AnnotatedText,
@@ -46,6 +52,10 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   const [saveFailed, setSaveFailed] = useState(false);
   const [fontSize, setFontSize] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // 장마다 학습 완료. 저장소에 쓴 뒤에만 바꿔, 화면과 저장소가 어긋나지 않게 한다(4.1-4).
+  const [done, setDone] = useState<Record<string, boolean>>({});
+  const [charCounts, setCharCounts] = useState<Record<string, number> | null>(null);
+  const [doneSaveFailed, setDoneSaveFailed] = useState<'list' | 'end' | null>(null);
   const scrollTarget = useRef<ScrollTarget>(null);
   const articleRef = useRef<HTMLDivElement>(null);
   const memosRef = useRef<Memo[]>([]);
@@ -59,8 +69,9 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
       getPosition(area, bookId),
       listMemosBySource(area, 'book', bookId),
       getReaderSettings(area),
+      listCompletions(area, bookId),
     ])
-      .then(([loadedBook, position, loadedMemos, settings]) => {
+      .then(([loadedBook, position, loadedMemos, settings, completions]) => {
         if (cancelled) return;
         setFontSize(settings.fontSize);
         if (!loadedBook) {
@@ -69,6 +80,12 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
         }
         setBook(loadedBook);
         setMemos(loadedMemos);
+        setDone(Object.fromEntries(completions.map((c) => [c.chapterId, c.done])));
+        getBookCharCounts(area, [loadedBook])
+          .then((counts) => {
+            if (!cancelled) setCharCounts(counts.get(loadedBook.id) ?? {});
+          })
+          .catch((e) => console.error('[NF-STUDY] Failed to count characters:', e));
         const has = (id?: string) => !!id && loadedBook.chapters.some((c) => c.id === id);
         let first: string | undefined;
         if (has(initialChapterId)) {
@@ -91,6 +108,33 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
       cancelled = true;
     };
   }, [area, bookId, initialChapterId, initialMemoId]);
+
+  // 다른 탭에서 바꾼 학습 완료도 보이게 한다.
+  useEffect(() => {
+    const prefix = completionKeyPrefix(bookId);
+    return area.onChanged((changes) => {
+      const updates: Record<string, boolean> = {};
+      Object.entries(changes).forEach(([key, change]) => {
+        if (!key.startsWith(prefix)) return;
+        const value = change.newValue;
+        updates[key.slice(prefix.length)] = isValidCompletion(value) ? value.done : false;
+      });
+      if (Object.keys(updates).length > 0) setDone((prev) => ({ ...prev, ...updates }));
+    });
+  }, [area, bookId]);
+
+  const toggleDone = (id: string, from: 'list' | 'end') => {
+    const next = !done[id];
+    setChapterDone(area, bookId, id, next)
+      .then(() => {
+        setDone((prev) => ({ ...prev, [id]: next }));
+        setDoneSaveFailed(null);
+      })
+      .catch((e) => {
+        console.error('[NF-STUDY] Failed to save completion:', e);
+        setDoneSaveFailed(from);
+      });
+  };
 
   // 장 본문을 불러온다.
   useEffect(() => {
@@ -299,6 +343,16 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
 
   const chapterIndex = book.chapters.findIndex((c) => c.id === chapterId);
   const chapter = book.chapters[chapterIndex];
+  const nextChapter = book.chapters[chapterIndex + 1];
+  const chapterDone = !!chapterId && !!done[chapterId];
+  const progress = charCounts
+    ? bookProgress(book, charCounts, new Set(Object.keys(done).filter((id) => done[id])))
+    : null;
+  const doneFailedNotice = (
+    <p className="nfr-error" role="alert">
+      저장하지 못했습니다. 다시 눌러 주세요.
+    </p>
+  );
 
   return (
     <div className="nfr-reader">
@@ -308,18 +362,28 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
         </button>
         <h1 className="nfr-reader-book-title">{book.title}</h1>
         {book.author && <p className="nfr-muted">{book.author}</p>}
+        {progress && <ProgressBar progress={progress} />}
+        {doneSaveFailed === 'list' && doneFailedNotice}
         <ol className="nfr-chapter-list">
           {book.chapters.map((c, i) => (
-            <li key={c.id}>
+            <li key={c.id} className={`nfr-chapter-item ${done[c.id] ? 'done' : ''}`}>
               <button
                 type="button"
                 className={`nfr-chapter-btn ${c.id === chapterId ? 'active' : ''}`}
                 aria-current={c.id === chapterId ? 'true' : undefined}
                 onClick={() => openChapter(c.id)}
               >
-                <span className="nfr-chapter-num">{i + 1}</span>
+                <span className="nfr-chapter-num">{done[c.id] ? '✓' : i + 1}</span>
                 <span className="nfr-chapter-name">{c.title}</span>
               </button>
+              <input
+                type="checkbox"
+                className="nfr-chapter-check"
+                checked={!!done[c.id]}
+                onChange={() => toggleDone(c.id, 'list')}
+                aria-label={`${c.title} 학습 완료`}
+                title="학습 완료"
+              />
             </li>
           ))}
         </ol>
@@ -383,6 +447,26 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
             );
           })}
         </div>
+        {paragraphs && chapterId && (
+          <div className="nfr-chapter-end">
+            {chapterDone && <p className="nfr-done-note">✓ 이 장을 학습 완료했습니다.</p>}
+            {doneSaveFailed === 'end' && doneFailedNotice}
+            <div className="nfr-chapter-end-actions">
+              <button
+                type="button"
+                className={`nfr-btn ${chapterDone ? '' : 'nfr-btn-primary'}`}
+                onClick={() => toggleDone(chapterId, 'end')}
+              >
+                {chapterDone ? '학습 완료 취소' : '이 장 학습 완료'}
+              </button>
+              {nextChapter && (
+                <button type="button" className="nfr-btn" onClick={() => openChapter(nextChapter.id)}>
+                  다음 장
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </article>
 
       <aside className="nfr-chapter-memos" aria-labelledby="chapter-memos-title">

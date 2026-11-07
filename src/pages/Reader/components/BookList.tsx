@@ -1,20 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { BookMeta, ReadingPosition } from '../../../shared/memo/types';
-import { deleteBook, listBooks, listMemos, listPositions } from '../../../shared/storage/repo';
+import {
+  deleteBook,
+  doneChapterIds,
+  getBookCharCounts,
+  listBooks,
+  listCompletions,
+  listMemos,
+  listPositions,
+} from '../../../shared/storage/repo';
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
+import { BookProgress, bookProgress, continueLabel } from '../logic/progress';
+import { ProgressBar } from './ProgressBar';
 
 interface Row {
   book: BookMeta;
   position: ReadingPosition | null;
   memoCount: number;
-}
-
-// 진도: 지금 읽는 장 번호 / 전체 장 수
-export function progressLabel(book: BookMeta, position: ReadingPosition | null): string {
-  const total = book.chapters.length;
-  const index = position ? book.chapters.findIndex((c) => c.id === position.chapterId) : -1;
-  return index >= 0 ? `${index + 1}/${total}장` : `0/${total}장 · 아직 읽지 않음`;
+  progress: BookProgress;
 }
 
 export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navigate }) => {
@@ -24,11 +28,13 @@ export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navig
 
   const load = async () => {
     try {
-      const [books, positions, memos] = await Promise.all([
+      const [books, positions, memos, completions] = await Promise.all([
         listBooks(area),
         listPositions(area),
         listMemos(area),
+        listCompletions(area),
       ]);
+      const counts = await getBookCharCounts(area, books);
       const positionByBook = new Map(positions.map((p) => [p.bookId, p]));
       const memoCount = new Map<string, number>();
       memos.forEach((m) => {
@@ -39,6 +45,7 @@ export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navig
           book,
           position: positionByBook.get(book.id) ?? null,
           memoCount: memoCount.get(book.id) ?? 0,
+          progress: bookProgress(book, counts.get(book.id) ?? {}, doneChapterIds(completions, book.id)),
         }))
       );
     } catch (e) {
@@ -102,8 +109,9 @@ export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navig
               >
                 <span className="nfr-book-title">{row.book.title}</span>
                 {row.book.author && <span className="nfr-muted">{row.book.author}</span>}
+                <ProgressBar progress={row.progress} />
                 <span className="nfr-book-meta">
-                  <span>{progressLabel(row.book, row.position)}</span>
+                  <span>{continueLabel(row.book, row.position)}</span>
                   <span>메모 {row.memoCount}개</span>
                 </span>
               </button>

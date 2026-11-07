@@ -339,7 +339,7 @@ describe('BookReader', () => {
   });
 
   // 4.4-6
-  it('4.4-6 두 번째 장의 다섯 번째 문단을 보다가 닫고 다시 열면 그 장이 열리고 그 문단으로 스크롤하며, 책 목록에 2/3장이 보인다', async () => {
+  it('4.4-6 두 번째 장의 다섯 번째 문단을 보다가 닫고 다시 열면 그 장이 열리고 그 문단으로 스크롤하며, 책 목록에 이어 읽기 2장이 보인다', async () => {
     const area = createMemoryArea();
     await seedBook(area);
     const first = renderReader(area);
@@ -373,7 +373,7 @@ describe('BookReader', () => {
         <BookList navigate={vi.fn()} />
       </ReaderEnvProvider>
     );
-    expect(await screen.findByText('2/3장')).toBeInTheDocument();
+    expect(await screen.findByText('이어 읽기: 2장 〈Second Wind〉')).toBeInTheDocument();
   });
 
   // 4.4-7
