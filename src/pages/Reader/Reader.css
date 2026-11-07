@@ -194,6 +194,7 @@ body {
   background: var(--nfr-surface);
   color: var(--nfr-text);
   font: inherit;
+  font-weight: 400;
 }
 
 .nfr-input:focus {
@@ -212,6 +213,14 @@ body {
   gap: 6px;
   font-size: 13px;
   color: var(--nfr-text-button);
+  cursor: pointer;
+}
+
+.nfr-check input {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--nfr-on-hover);
   cursor: pointer;
 }
 

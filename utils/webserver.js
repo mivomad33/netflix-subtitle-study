@@ -32,6 +32,8 @@ var server = new WebpackDevServer(
     liveReload: false,
     client: {
       webSocketTransport: 'sockjs',
+      // 기존 Sass 경고가 화면을 덮지 않게 오류만 덮어 보여 준다.
+      overlay: { errors: true, warnings: false },
     },
     webSocketServer: 'sockjs',
     host: 'localhost',

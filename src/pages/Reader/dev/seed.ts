@@ -24,10 +24,11 @@ const STORY = [
   ],
 ];
 
-const WORDS =
+const WORDS = (
   'river stone quiet window morning letter garden harbor lantern meadow winter summer candle orchard silver kitchen whisper journey promise shadow ' +
   'patient gentle bright narrow ancient careful hollow distant golden simple walked carried waited listened opened noticed remembered followed ' +
-  'the a and of to in on with under over before after because while although'.split(' ');
+  'the a and of to in on with under over before after because while although'
+).split(' ');
 
 function syntheticParagraph(seed: number, length: number): string {
   const out: string[] = [];
