@@ -34,3 +34,16 @@ export interface MultiRoundChecklists {
 }
 
 
+
+// 영어 대사의 일부에 단 하이라이트. note가 비어 있으면 하이라이트만 있는 것이다.
+export interface SentenceAnnotation {
+  id: string;
+  sentenceStartMs: number; // 붙어 있는 문장의 시작 시간
+  sentenceText: string;    // 붙어 있는 문장의 영어 원문
+  start: number;           // 문장 원문 안의 시작 위치(포함)
+  end: number;             // 문장 원문 안의 끝 위치(제외)
+  quote: string;           // 고른 글
+  note: string;            // 메모
+  createdAt: number;
+  updatedAt: number;
+}

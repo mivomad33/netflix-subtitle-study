@@ -37,6 +37,7 @@ Study data lives in the `localStorage` of the Netflix page. Key names are collec
 
 - `NF_studied_videos`: Metadata for studied videos (ID, title, cover image, total pages, update time, and so on)
 - `NF_checklist_{videoId}`: Five-step checklist for each round and page of a video
+- `NF_annotations_{videoId}`: Highlights and notes for a video. Each one stores the sentence start time, the sentence text, the position within it, and the selected text, so it is reattached only to a sentence with the same text even if subtitle alignment changes. Resetting study progress or changing lines per page does not remove it.
 - `NF_itemsPerPage_{videoId}`: Lines per page for a video
 - `NF_isEnglishVisible`, `NF_isKoreanVisible`: Subtitle visibility
 - `NF_isAutoPause`, `NF_isPageEndPause`, `NF_isAutoSkip`, `NF_isSmartSkim`, `NF_isSentenceLoop`: Playback settings
@@ -47,6 +48,7 @@ Study data lives in the `localStorage` of the Netflix page. Key names are collec
 
 - Subtitle interception and alignment: [networkInterceptor.ts](src/pages/Content/utils/networkInterceptor.ts), [subtitleHelper.ts](src/pages/Content/utils/subtitleHelper.ts)
 - Study panel: [StudyPanel.tsx](src/pages/Content/StudyPanel.tsx), [useNetflixPlayer.ts](src/pages/Content/hooks/useNetflixPlayer.ts), [useStudyHotkeys.ts](src/pages/Content/hooks/useStudyHotkeys.ts)
+- Highlights and notes: [SentenceList.tsx](src/pages/Content/components/SentenceList.tsx), [AnnotationEditor.tsx](src/pages/Content/components/AnnotationEditor.tsx), [useAnnotations.ts](src/pages/Content/hooks/useAnnotations.ts), [annotationHelper.ts](src/pages/Content/utils/annotationHelper.ts)
 - Checklist: [StudyChecklist.tsx](src/pages/Content/StudyChecklist.tsx)
 - Dashboard: [StudyDashboardModal.tsx](src/pages/Content/StudyDashboardModal.tsx), [dashboardHelper.ts](src/pages/Content/utils/dashboardHelper.ts)
 - Overlay subtitles: [VideoOverlaySubtitle.tsx](src/pages/Content/VideoOverlaySubtitle.tsx)

@@ -15,6 +15,7 @@ import {
 } from '../../types';
 import { useNetflixPlayer } from './hooks/useNetflixPlayer';
 import { useStudyHotkeys } from './hooks/useStudyHotkeys';
+import { useAnnotations } from './hooks/useAnnotations';
 import { StudyControlPanel } from './components/StudyControlPanel';
 import { SentenceList } from './components/SentenceList';
 import { RoundSelector } from './components/RoundSelector';
@@ -272,6 +273,12 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
     return pages;
   };
 
+  const { annotations, addAnnotation, updateNote, removeAnnotation } =
+    useAnnotations(videoId);
+  const [editingAnnotationId, setEditingAnnotationId] = useState<
+    string | null
+  >(null);
+
   // 1. 플레이어 상태 제어 훅
   const {
     player,
@@ -290,7 +297,23 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
     isSentenceLoop,
     isPageEndPause,
     sentenceRefs,
+    isFollowPaused: editingAnnotationId !== null,
   });
+
+  // 메모를 여는 동안에는 영상을 멈춰 글을 쓰는 사이에 대사가 지나가지 않게 한다.
+  const handleEditAnnotation = useCallback(
+    (id: string | null) => {
+      if (id !== null && player && player.isPlaying()) {
+        player.pause();
+      }
+      setEditingAnnotationId(id);
+    },
+    [player]
+  );
+
+  useEffect(() => {
+    setEditingAnnotationId(null);
+  }, [currentTab]);
 
   // 3. 단축키 바인딩 훅
   useStudyHotkeys({
@@ -501,6 +524,12 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
             toggleTranslation={toggleTranslation}
             handlePlaySentence={handlePlaySentence}
             sentenceRefs={sentenceRefs}
+            annotations={annotations}
+            editingAnnotationId={editingAnnotationId}
+            onAddAnnotation={addAnnotation}
+            onUpdateNote={updateNote}
+            onRemoveAnnotation={removeAnnotation}
+            onEditAnnotation={handleEditAnnotation}
           />
         </div>
       )}

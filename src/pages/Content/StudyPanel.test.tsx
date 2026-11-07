@@ -164,4 +164,47 @@ describe('StudyPanel Main Component', () => {
 
     expect(confirmSpy).toHaveBeenCalled();
   });
+
+  it('saves a memo on a stored highlight and keeps it after a progress reset', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    localStorage.setItem(
+      'NF_annotations_12345',
+      JSON.stringify([
+        {
+          id: 'a1',
+          sentenceStartMs: 3000,
+          sentenceText: 'Sentence Two',
+          start: 9,
+          end: 12,
+          quote: 'Two',
+          note: '',
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      ])
+    );
+
+    const { container } = render(
+      <StudyPanel
+        sentences={mockSentences}
+        videoId="12345"
+        isPanelVisible={true}
+        isOverlayVisible={false}
+        onTogglePanel={mockTogglePanel}
+        onToggleOverlay={mockToggleOverlay}
+      />
+    );
+
+    fireEvent.click(container.querySelector('mark')!);
+    fireEvent.change(screen.getByLabelText('메모'), {
+      target: { value: 'number two\nsecond line' },
+    });
+
+    const saved = JSON.parse(localStorage.getItem('NF_annotations_12345')!);
+    expect(saved[0].note).toBe('number two\nsecond line');
+
+    fireEvent.click(screen.getByTitle('학습 환경 설정'));
+    fireEvent.click(screen.getByText('현재 영상 학습 초기화'));
+    expect(localStorage.getItem('NF_annotations_12345')).not.toBeNull();
+  });
 });

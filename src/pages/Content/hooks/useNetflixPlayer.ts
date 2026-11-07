@@ -18,6 +18,8 @@ interface UseNetflixPlayerProps {
   isSentenceLoop?: boolean;
   isPageEndPause: boolean;
   sentenceRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
+  // true면 재생 위치를 따라 탭을 바꾸거나 스크롤하지 않는다(메모 쓰는 중).
+  isFollowPaused?: boolean;
 }
 
 export function useNetflixPlayer({
@@ -32,6 +34,7 @@ export function useNetflixPlayer({
   isSentenceLoop = false,
   isPageEndPause,
   sentenceRefs,
+  isFollowPaused = false,
 }: UseNetflixPlayerProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [isSubtitleActive, setIsSubtitleActive] = useState(false);
@@ -52,6 +55,11 @@ export function useNetflixPlayer({
   const isAutoPauseRef = useRef(isAutoPause);
   const isSentenceLoopRef = useRef(isSentenceLoop);
   const isPageEndPauseRef = useRef(isPageEndPause);
+  const isFollowPausedRef = useRef(isFollowPaused);
+
+  useEffect(() => {
+    isFollowPausedRef.current = isFollowPaused;
+  }, [isFollowPaused]);
 
   useEffect(() => {
     isAutoSkipRef.current = isAutoSkip;
@@ -349,7 +357,7 @@ export function useNetflixPlayer({
 
         // 현재 문장이 있는 탭으로 자동 전환
         const targetTab = Math.floor(currentIndex / itemsPerPage);
-        if (targetTab !== currentTab) {
+        if (targetTab !== currentTab && !isFollowPausedRef.current) {
           console.log('[NF-STUDY] Syncing tab index with current play time.', {
             prevTab: currentTab,
             targetTab,
@@ -361,7 +369,7 @@ export function useNetflixPlayer({
         setActiveIndex(currentIndex);
 
         const currentElement = sentenceRefs.current[currentIndex];
-        if (currentElement) {
+        if (currentElement && !isFollowPausedRef.current) {
           const rect = currentElement.getBoundingClientRect();
           const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
 

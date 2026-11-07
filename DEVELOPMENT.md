@@ -37,6 +37,7 @@ npm run test:run
 
 - `NF_studied_videos`: 학습한 영상의 메타데이터(ID, 제목, 커버 이미지, 총 페이지 수, 업데이트 시간 등)
 - `NF_checklist_{videoId}`: 영상의 회차별, 페이지별 5단계 체크리스트
+- `NF_annotations_{videoId}`: 영상의 하이라이트와 메모. 문장 시작 시간, 문장 원문, 문장 안의 위치, 고른 글을 함께 저장해 자막 정렬이 바뀌어도 원문이 같은 문장에만 다시 붙입니다. 학습 기록 초기화나 페이지당 대사 수 변경으로 지우지 않습니다.
 - `NF_itemsPerPage_{videoId}`: 영상의 페이지당 대사 수
 - `NF_isEnglishVisible`, `NF_isKoreanVisible`: 자막 표시 설정
 - `NF_isAutoPause`, `NF_isPageEndPause`, `NF_isAutoSkip`, `NF_isSmartSkim`, `NF_isSentenceLoop`: 재생 설정
@@ -47,6 +48,7 @@ npm run test:run
 
 - 자막 가로채기와 정렬: [networkInterceptor.ts](src/pages/Content/utils/networkInterceptor.ts), [subtitleHelper.ts](src/pages/Content/utils/subtitleHelper.ts)
 - 학습 패널: [StudyPanel.tsx](src/pages/Content/StudyPanel.tsx), [useNetflixPlayer.ts](src/pages/Content/hooks/useNetflixPlayer.ts), [useStudyHotkeys.ts](src/pages/Content/hooks/useStudyHotkeys.ts)
+- 하이라이트와 메모: [SentenceList.tsx](src/pages/Content/components/SentenceList.tsx), [AnnotationEditor.tsx](src/pages/Content/components/AnnotationEditor.tsx), [useAnnotations.ts](src/pages/Content/hooks/useAnnotations.ts), [annotationHelper.ts](src/pages/Content/utils/annotationHelper.ts)
 - 체크리스트: [StudyChecklist.tsx](src/pages/Content/StudyChecklist.tsx)
 - 대시보드: [StudyDashboardModal.tsx](src/pages/Content/StudyDashboardModal.tsx), [dashboardHelper.ts](src/pages/Content/utils/dashboardHelper.ts)
 - 영상 위 자막: [VideoOverlaySubtitle.tsx](src/pages/Content/VideoOverlaySubtitle.tsx)

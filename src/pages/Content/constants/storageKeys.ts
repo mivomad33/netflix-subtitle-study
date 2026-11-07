@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   FONT_SIZE: 'NF_fontSize',
   ITEMS_PER_PAGE_PREFIX: 'NF_itemsPerPage_',
   CHECKLIST_PREFIX: 'NF_checklist_',
+  ANNOTATIONS_PREFIX: 'NF_annotations_',
   STUDIED_VIDEOS: 'NF_studied_videos',
   STUDY_PANEL_WIDTH_RATIO: 'NF_studyPanelWidthRatio',
   LINGO_ACTIVE: 'NF_lingoActive',
