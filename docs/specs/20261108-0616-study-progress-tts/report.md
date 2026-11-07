@@ -1,8 +1,10 @@
 # 결과 보고서: 원서 학습 진행률과 소리 내어 읽기
 
-명세서: [spec.md](spec.md) · 진행 기록: [progress.md](progress.md) · 작업 브랜치: `study-progress-tts`(main에 머지하지 않음)
+명세서: [spec.md](spec.md) · 진행 기록: [progress.md](progress.md) · 작업 브랜치: `study-progress-tts`(2026-11-08 main에 머지)
 
 ## 사용자가 할 일
+
+> 2026-11-08 사용자가 아래 확인을 모두 마쳤다고 알리고, `review-done` 없이 상태를 '완료'로 바꾸고 머지·push하라고 했다. `browser-check`와 `design-check`는 돌리지 않았다. 그래서 4.6-1, 4.6-2와 완료 정의의 "`design-check` 깨끗한 회차·시각 회귀"는 AI가 확인하지 않은 채로 남는다.
 
 ### 1. 확인 (명세서 5장 "사용자가 마지막에 확인한다")
 
