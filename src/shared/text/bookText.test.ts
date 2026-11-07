@@ -265,7 +265,8 @@ describe('전체 흐름', () => {
     ]);
   });
 
-  it('200만 자 입력을 2초 안에 처리한다', () => {
+  // 시간은 재지 않는다(명세서 4.10-3: jsdom 단위 테스트로는 시간을 재지 않고 scripts/perf/measure.mjs로 잰다).
+  it('200만 자 입력도 정리하고 장으로 나눈다', () => {
     const block = [
       'Chapter 12',
       'The quiet harbour town woke slowly as gulls circled over the well-known pier and',
@@ -278,14 +279,11 @@ describe('전체 흐름', () => {
     const raw = block.repeat(Math.ceil(2_000_000 / block.length));
     expect(raw.length).toBeGreaterThanOrEqual(2_000_000);
 
-    const started = performance.now();
     const paragraphs = clean(raw);
     const starts = detectChapterStarts(paragraphs);
     const chapters = splitIntoChapters(paragraphs, starts);
-    const elapsed = performance.now() - started;
 
     expect(chapters.length).toBe(starts.length);
     expect(chapters[0].paragraphs[0]).toContain('counting knots');
-    expect(elapsed).toBeLessThan(2000);
   });
 });

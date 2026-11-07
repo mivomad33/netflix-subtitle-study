@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Memo, createId } from '../../../shared/memo/types';
 import { ensureLegacyMigration, getStoreClient } from '../utils/storeClient';
 import { getVideoInfo } from '../utils/dashboardHelper';
+import { getAnnotationsForSentence } from '../utils/annotationHelper';
 
 export interface NewAnnotationInput {
   sentenceStartMs: number;
@@ -10,9 +11,14 @@ export interface NewAnnotationInput {
   end: number;
 }
 
+type Sentence = { startTime_ms: number; text: string };
+
 // 넷플릭스 영상 하나의 메모. 공통 저장소에서 불러오고, 바뀔 때마다 그 메모 하나만 저장한다.
-export function useAnnotations(videoId: string | number) {
+// 어느 대사에도 붙지 않는 메모는 모아 보기가 "위치를 찾지 못함"으로 보이도록 저장소에 알린다.
+export function useAnnotations(videoId: string | number, sentences: Sentence[] = []) {
   const [annotations, setAnnotations] = useState<Memo[]>([]);
+  // 저장된 메모를 다 불러온 영상. 영상이 바뀐 직후 앞 영상의 메모로 판정하지 않기 위해 둔다.
+  const [loadedVideoId, setLoadedVideoId] = useState<string | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
   const annotationsRef = useRef<Memo[]>([]);
   annotationsRef.current = annotations;
@@ -22,19 +28,53 @@ export function useAnnotations(videoId: string | number) {
     const sourceId = videoId.toString();
     ensureLegacyMigration()
       .then(() => getStoreClient().call<Memo[]>({ op: 'memos.list', videoId: sourceId }))
-      .then((loaded) => {
+      .then((stored) => {
         if (cancelled) return;
-        // 불러오는 동안 만든 메모는 그대로 두고, 불러온 것을 합친다.
+        // 불러오는 동안 이 영상에 만든 메모는 그대로 두고, 불러온 것을 합친다. 앞 영상의 메모는 버린다.
         setAnnotations((prev) => {
-          const localIds = new Set(prev.map((m) => m.id));
-          return [...prev, ...loaded.filter((m) => !localIds.has(m.id))];
+          const local = prev.filter((m) => m.sourceId === sourceId);
+          const localIds = new Set(local.map((m) => m.id));
+          return [...local, ...stored.filter((m) => !localIds.has(m.id))];
         });
+        setLoadedVideoId(sourceId);
       })
       .catch((e) => console.error('[NF-STUDY] Failed to load annotations:', e));
     return () => {
       cancelled = true;
     };
   }, [videoId]);
+
+  // 메모 글을 고칠 때마다 대사 전체를 훑지 않도록 대사를 원문으로 묶어 둔다.
+  const sentencesByText = useMemo(() => {
+    const map = new Map<string, Sentence[]>();
+    sentences.forEach((s) => map.set(s.text, [...(map.get(s.text) ?? []), s]));
+    return map;
+  }, [sentences]);
+
+  const reportedUnplaced = useRef<string | null>(null);
+  useEffect(() => {
+    const sourceId = videoId.toString();
+    if (loadedVideoId !== sourceId || sentencesByText.size === 0) return;
+    const ids = annotations
+      .filter((m) => m.sourceId === sourceId)
+      .filter(
+        (m) =>
+          !(sentencesByText.get(m.contextText) ?? []).some(
+            (s) => getAnnotationsForSentence([m], s).length > 0
+          )
+      )
+      .map((m) => m.id)
+      .sort();
+    const signature = `${sourceId}:${ids.join(',')}`;
+    if (reportedUnplaced.current === signature) return;
+    reportedUnplaced.current = signature;
+    getStoreClient()
+      .call({ op: 'memos.reportUnplaced', videoId: sourceId, ids })
+      .catch((e) => {
+        reportedUnplaced.current = null;
+        console.error('[NF-STUDY] Failed to report unplaced annotations:', e);
+      });
+  }, [annotations, loadedVideoId, sentencesByText, videoId]);
 
   const save = useCallback((memo: Memo) => {
     getStoreClient()

@@ -80,6 +80,7 @@ Highlights, notes, and books are stored in the extension's own storage, `chrome.
 - `pos:{bookId}`: The last reading position in a book (chapter and paragraph)
 - `reader:settings`: Book reader settings (font size)
 - `meta:legacyMigration`: Progress and completion marker for moving old notes
+- `meta:netflixUnplaced:{videoId}`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
 
 ### Netflix localStorage
 

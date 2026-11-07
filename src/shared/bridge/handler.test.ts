@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createMemoryArea } from '../storage/storageArea';
-import { putMemo, listMemos, saveBook, getChapterParagraphs } from '../storage/repo';
+import { putMemo, listMemos, saveBook, getChapterParagraphs, getUnplacedNetflixMemoIds } from '../storage/repo';
 import { netflixMemo, bookMemo } from '../storage/testFixtures';
 import { BRIDGE_REQUEST, parseBridgeRequest } from './protocol';
 import { handleBridgeRequest } from './handler';
@@ -59,12 +59,23 @@ describe('bridge request handling', () => {
     expect(await getChapterParagraphs(area, 'bk1', 'c1')).toEqual(['Keep me.']);
   });
 
+  it('records and clears the Netflix memos the panel could not place', async () => {
+    const area = createMemoryArea();
+    expect(await run(area, { op: 'memos.reportUnplaced', videoId: 'v1', ids: ['n1', 'n2'] })).toEqual({ ok: true });
+    expect(Array.from(await getUnplacedNetflixMemoIds(area, ['v1', 'v2'])).sort()).toEqual(['n1', 'n2']);
+    expect(await run(area, { op: 'memos.reportUnplaced', videoId: 'v1', ids: [] })).toEqual({ ok: true });
+    expect((await getUnplacedNetflixMemoIds(area, ['v1'])).size).toBe(0);
+    expect(await area.getKeys()).toEqual([]);
+  });
+
   it('ignores malformed messages', () => {
     expect(parseBridgeRequest(null)).toBeNull();
     expect(parseBridgeRequest({ channel: 'OTHER', requestId: 'r', op: 'memos.list', videoId: 'v' })).toBeNull();
     expect(parseBridgeRequest(req({ op: 'memos.list' }))).toBeNull();
     expect(parseBridgeRequest(req({ op: 'memos.put', memo: { id: 'x' } }))).toBeNull();
     expect(parseBridgeRequest(req({ op: 'page.open', page: 'settings' }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v', ids: [1] }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v', ids: 'n1' }))).toBeNull();
     expect(parseBridgeRequest({ op: 'memos.list', videoId: 'v', channel: BRIDGE_REQUEST })).toBeNull();
   });
 });

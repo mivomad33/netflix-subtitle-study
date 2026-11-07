@@ -80,6 +80,7 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 - `pos:{bookId}`: 책의 마지막 읽기 위치(장과 문단)
 - `reader:settings`: 원서 리더 설정(글자 크기)
 - `meta:legacyMigration`: 예전 메모 옮기기의 진행 기록과 완료 표시
+- `meta:netflixUnplaced:{videoId}`: 학습 패널이 그 영상의 대사에서 찾지 못한 넷플릭스 메모 id 목록. 메모 모아 보기가 "위치를 찾지 못함"을 붙일 때 쓰고, 패널을 열 때마다 다시 쓰므로 백업에는 넣지 않습니다.
 
 ### 넷플릭스 localStorage
 

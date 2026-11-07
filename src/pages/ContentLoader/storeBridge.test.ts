@@ -41,6 +41,33 @@ describe('store bridge between the Netflix page and the content script', () => {
     expect(await getMemo(area, 'n1')).toBeNull();
   });
 
+  it('applies requests in the order they were sent even when storage answers slowly', async () => {
+    // chrome.storage처럼 읽기·쓰기가 다른 작업 사이에 끼어드는 저장소
+    const base = createMemoryArea();
+    const slow = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const area = {
+      ...base,
+      get: async (keys: string[]) => {
+        const v = await base.get(keys);
+        await slow(10);
+        return v;
+      },
+      set: async (items: Record<string, unknown>) => {
+        await slow(10);
+        return base.set(items);
+      },
+    };
+    uninstall = installStoreBridge(window, area, vi.fn());
+    const client = createBridgeClient(window, 2000);
+
+    // 새 메모를 저장하자마자 지운다.
+    const put = client.call({ op: 'memos.put', memo: netflixMemo({ id: 'n5' }) });
+    const del = client.call({ op: 'memos.delete', id: 'n5' });
+    await Promise.all([put, del]);
+
+    expect(await getMemo(base, 'n5')).toBeNull();
+  });
+
   it('ignores messages from other windows and requests outside the protocol', async () => {
     const area = createMemoryArea({ 'book:bk1': { id: 'bk1' } });
     await putMemo(area, bookMemo({ id: 'b1' }));

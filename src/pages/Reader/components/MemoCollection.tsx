@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookMeta, Memo } from '../../../shared/memo/types';
-import { deleteMemo, listBooks, listMemos, putMemo } from '../../../shared/storage/repo';
+import {
+  deleteMemo,
+  getChaptersParagraphs,
+  getUnplacedNetflixMemoIds,
+  listBooks,
+  listMemos,
+  putMemo,
+} from '../../../shared/storage/repo';
 import { KEY } from '../../../shared/storage/keys';
 import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
 import { useReaderEnv } from '../env';
@@ -49,6 +56,7 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
   const [memos, setMemos] = useState<Memo[] | null>(null);
   const [books, setBooks] = useState<BookMeta[]>([]);
   const [chapterTexts, setChapterTexts] = useState<Record<string, string[]>>({});
+  const [unplacedNetflix, setUnplacedNetflix] = useState<Set<string>>(() => new Set());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SourceFilter>({ kind: 'all' });
@@ -66,13 +74,23 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
       try {
         const [loadedMemos, loadedBooks] = await Promise.all([listMemos(area), listBooks(area)]);
         // 원서 메모가 아직 제자리를 찾는지 보려고, 메모가 붙은 장의 본문만 한 번에 읽는다.
-        const needed = Array.from(
-          new Set(loadedMemos.filter((m) => m.kind === 'book' && m.chapterId).map(chapterTextKey))
-        );
-        const texts = (needed.length > 0 ? await area.get(needed) : {}) as Record<string, string[]>;
+        // 넷플릭스 메모는 학습 패널이 대사에서 찾지 못했다고 남긴 목록으로 본다.
+        const [texts, unplaced] = await Promise.all([
+          getChaptersParagraphs(
+            area,
+            loadedMemos
+              .filter((m) => m.kind === 'book' && m.chapterId)
+              .map((m) => ({ bookId: m.sourceId, chapterId: m.chapterId! }))
+          ),
+          getUnplacedNetflixMemoIds(
+            area,
+            Array.from(new Set(loadedMemos.filter((m) => m.kind === 'netflix').map((m) => m.sourceId)))
+          ),
+        ]);
         if (cancelled) return;
         setBooks(loadedBooks);
         setChapterTexts(texts);
+        setUnplacedNetflix(unplaced);
         openedAt.current = new Map(loadedMemos.map((m) => [m.id, m.updatedAt]));
         setMemos(loadedMemos);
       } catch (e) {
@@ -99,9 +117,9 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
 
   const isAnchored = useCallback(
     (m: Memo) =>
-      m.kind === 'netflix' ||
-      (booksById.has(m.sourceId) && isBookMemoAnchored(m, chapterTexts[chapterTextKey(m)])),
-    [booksById, chapterTexts]
+      (m.kind === 'netflix' && !unplacedNetflix.has(m.id)) ||
+      (m.kind === 'book' && booksById.has(m.sourceId) && isBookMemoAnchored(m, chapterTexts[chapterTextKey(m)])),
+    [booksById, chapterTexts, unplacedNetflix]
   );
 
   // 고치는 동안 항목이 맨 위로 뛰지 않게, 순서는 화면을 연 때의 고친 시각으로 정한다.

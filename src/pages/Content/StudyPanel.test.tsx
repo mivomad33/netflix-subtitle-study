@@ -2,7 +2,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { createMemoryArea } from '../../shared/storage/storageArea';
 import { createDirectClient } from '../../shared/bridge/directClient';
-import { getMemo, listMemos } from '../../shared/storage/repo';
+import { getMemo, getUnplacedNetflixMemoIds, listMemos, putMemo } from '../../shared/storage/repo';
+import { netflixMemo } from '../../shared/storage/testFixtures';
 import { setStoreClient } from './utils/storeClient';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import StudyPanel from './StudyPanel';
@@ -274,6 +275,30 @@ describe('StudyPanel Main Component', () => {
 
       await act(async () => releaseList!());
       await waitFor(() => expect(container.querySelectorAll('mark')).toHaveLength(2));
+    });
+
+    it('4.5-7 records which stored memos match no subtitle line so the collection can mark them', async () => {
+      await putMemo(area, netflixMemo({ id: 'placed', sourceId: '12345', contextText: 'Sentence Two', start: 9, end: 12, quote: 'Two', sentenceStartMs: 3000 }));
+      await putMemo(area, netflixMemo({ id: 'lost', sourceId: '12345', contextText: 'A line that was cut.', start: 2, end: 6, quote: 'line', sentenceStartMs: 3000 }));
+      const { container } = renderPanel();
+      await waitFor(() => expect(container.querySelectorAll('mark')).toHaveLength(1));
+
+      await waitFor(async () =>
+        expect(Array.from(await getUnplacedNetflixMemoIds(area, ['12345']))).toEqual(['lost'])
+      );
+      // 4.1-5 그리지 못한 메모도 저장소에서 지우지 않는다.
+      expect(await getMemo(area, 'lost')).not.toBeNull();
+    });
+
+    it('4.5-7 does not report the previous video memos when the panel switches videos', async () => {
+      await putMemo(area, netflixMemo({ id: 'lost', sourceId: '12345', contextText: 'A line that was cut.', start: 2, end: 6, quote: 'line' }));
+      const props = { isPanelVisible: true, isOverlayVisible: false, onTogglePanel: mockTogglePanel, onToggleOverlay: mockToggleOverlay };
+      const { rerender } = render(<StudyPanel sentences={mockSentences} videoId="12345" {...props} />);
+      await waitFor(async () => expect((await getUnplacedNetflixMemoIds(area, ['12345'])).size).toBe(1));
+
+      rerender(<StudyPanel sentences={[{ ...mockSentences[0], text: 'Other show line' }]} videoId="67890" {...props} />);
+      await new Promise((r) => setTimeout(r, 50));
+      expect((await getUnplacedNetflixMemoIds(area, ['67890'])).size).toBe(0);
     });
 
     it('keeps memos after resetting progress or changing lines per page', async () => {

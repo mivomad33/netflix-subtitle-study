@@ -1,4 +1,10 @@
-import { getMemo, deleteMemo, listMemosBySource, putMemo } from '../storage/repo';
+import {
+  getMemo,
+  deleteMemo,
+  listMemosBySource,
+  putMemo,
+  setUnplacedNetflixMemos,
+} from '../storage/repo';
 import { migrateLegacyAnnotations } from '../storage/legacyMigration';
 import { StorageArea } from '../storage/storageArea';
 import { BridgeRequest, ExtensionPage } from './protocol';
@@ -28,6 +34,9 @@ export async function handleBridgeRequest(
         await deleteMemo(area, request.id);
         return { ok: true };
       }
+      case 'memos.reportUnplaced':
+        await setUnplacedNetflixMemos(area, request.videoId, request.ids);
+        return { ok: true };
       case 'legacy.migrate':
         return { ok: true, result: await migrateLegacyAnnotations(area, request.payload) };
       case 'page.open':

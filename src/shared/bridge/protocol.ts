@@ -22,6 +22,7 @@ export type BridgeCall =
   | { op: 'memos.list'; videoId: string }
   | { op: 'memos.put'; memo: Memo }
   | { op: 'memos.delete'; id: string }
+  | { op: 'memos.reportUnplaced'; videoId: string; ids: string[] }
   | { op: 'legacy.migrate'; payload: LegacyPayload }
   | { op: 'page.open'; page: ExtensionPage };
 
@@ -34,6 +35,9 @@ export interface BridgeResponse {
   result?: unknown;
   error?: string;
 }
+
+// 한 영상에서 위치를 찾지 못했다고 남길 수 있는 메모 수의 상한.
+const MAX_UNPLACED_IDS = 5000;
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v !== '';
 
@@ -59,6 +63,13 @@ export function parseBridgeRequest(data: unknown): BridgeRequest | null {
         : null;
     case 'memos.delete':
       return isNonEmptyString(d.id) ? (d as unknown as BridgeRequest) : null;
+    case 'memos.reportUnplaced':
+      return isNonEmptyString(d.videoId) &&
+        Array.isArray(d.ids) &&
+        d.ids.length <= MAX_UNPLACED_IDS &&
+        d.ids.every(isNonEmptyString)
+        ? (d as unknown as BridgeRequest)
+        : null;
     case 'legacy.migrate':
       return isLegacyPayload(d.payload) ? (d as unknown as BridgeRequest) : null;
     case 'page.open':

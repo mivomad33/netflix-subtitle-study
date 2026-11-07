@@ -79,8 +79,21 @@ export async function getChapterParagraphs(
   chapterId: string
 ): Promise<string[]> {
   const key = KEY.chapter(bookId, chapterId);
-  const value = (await area.get([key]))[key];
-  return Array.isArray(value) ? value.filter((p) => typeof p === 'string') : [];
+  return toParagraphs((await area.get([key]))[key]);
+}
+
+const toParagraphs = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((p): p is string => typeof p === 'string') : [];
+
+// 여러 장의 본문을 한 번에 읽는다. 결과의 키는 KEY.chapter(bookId, chapterId)다.
+export async function getChaptersParagraphs(
+  area: StorageArea,
+  chapters: { bookId: string; chapterId: string }[]
+): Promise<Record<string, string[]>> {
+  const keys = Array.from(new Set(chapters.map((c) => KEY.chapter(c.bookId, c.chapterId))));
+  if (keys.length === 0) return {};
+  const values = await area.get(keys);
+  return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, toParagraphs(v)]));
 }
 
 export async function saveBook(
@@ -150,4 +163,25 @@ export async function getReaderSettings(area: StorageArea): Promise<ReaderSettin
 
 export async function setReaderSettings(area: StorageArea, settings: ReaderSettings) {
   await area.set({ [KEY.readerSettings]: settings });
+}
+
+// ---- 학습 패널에서 위치를 찾지 못한 넷플릭스 메모 ----
+
+export async function setUnplacedNetflixMemos(area: StorageArea, videoId: string, ids: string[]) {
+  const key = KEY.netflixUnplaced(videoId);
+  if (ids.length === 0) await area.remove([key]);
+  else await area.set({ [key]: ids });
+}
+
+export async function getUnplacedNetflixMemoIds(
+  area: StorageArea,
+  videoIds: string[]
+): Promise<Set<string>> {
+  if (videoIds.length === 0) return new Set();
+  const values = await area.get(videoIds.map(KEY.netflixUnplaced));
+  return new Set(
+    Object.values(values).flatMap((v) =>
+      Array.isArray(v) ? v.filter((id): id is string => typeof id === 'string') : []
+    )
+  );
 }

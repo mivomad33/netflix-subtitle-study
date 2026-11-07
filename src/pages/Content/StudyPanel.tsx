@@ -274,7 +274,7 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
   };
 
   const { annotations, addAnnotation, updateNote, removeAnnotation, saveFailed } =
-    useAnnotations(videoId);
+    useAnnotations(videoId, sentences);
   const [editingAnnotationId, setEditingAnnotationId] = useState<
     string | null
   >(null);

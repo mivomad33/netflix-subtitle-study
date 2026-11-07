@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getMemo, putMemo, saveBook } from '../../../shared/storage/repo';
+import { getMemo, putMemo, saveBook, setUnplacedNetflixMemos } from '../../../shared/storage/repo';
 import { StorageArea, createMemoryArea } from '../../../shared/storage/storageArea';
 import { bookMemo, netflixMemo } from '../../../shared/storage/testFixtures';
 import { ReaderEnvProvider } from '../env';
@@ -120,6 +120,23 @@ describe('MemoCollection', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '원래 위치로' }));
     expect(openTab).toHaveBeenCalledWith('https://www.netflix.com/watch/81234567?t=83');
+  });
+
+  // 4.5-7
+  it('4.5-7 학습 패널이 대사를 찾지 못했다고 남긴 넷플릭스 메모는 "위치를 찾지 못함"이 붙고 그 영상 처음을 연다', async () => {
+    const area = createMemoryArea();
+    await putMemo(area, netflixMemo({ id: 'n-lost', sourceId: '81234567', sentenceStartMs: 83_900 }));
+    await putMemo(area, netflixMemo({ id: 'n-ok', sourceId: '81234567', sentenceStartMs: 12_000, updatedAt: 0 }));
+    await setUnplacedNetflixMemos(area, '81234567', ['n-lost']);
+    const openTab = vi.fn();
+    const { container } = renderCollection(area, openTab);
+
+    await waitFor(() => expect(container.querySelectorAll('[data-memo-card]')).toHaveLength(2));
+    expect(within(card(container, 'n-lost')).getByText('위치를 찾지 못함')).toBeInTheDocument();
+    expect(within(card(container, 'n-ok')).queryByText('위치를 찾지 못함')).toBeNull();
+
+    fireEvent.click(within(card(container, 'n-lost')).getByRole('button', { name: '영상 열기' }));
+    expect(openTab).toHaveBeenCalledWith('https://www.netflix.com/watch/81234567');
   });
 
   // 4.5-2
