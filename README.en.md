@@ -4,7 +4,7 @@
 
 <h1>netflix-subtitle-study</h1>
 
-<p>A Chrome extension that turns Netflix English and Korean subtitles into a script, so you can study a language sentence by sentence while you watch.</p>
+<p>A Chrome extension that turns Netflix English and Korean subtitles into a script, so you can study a language sentence by sentence while you watch. You can also paste in an English book and take notes as you read.</p>
 
 [![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest_V3-4285F4?logo=googlechrome&logoColor=white)](src/manifest.json)
 [![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](package.json)
@@ -13,7 +13,7 @@
 [![Vitest](https://img.shields.io/badge/Vitest-4-6E9F18?logo=vitest&logoColor=white)](vitest.config.ts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[Features](#features) · [Hotkeys](#hotkeys) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Development guide](DEVELOPMENT.en.md)
+[Features](#features) · [Book reader and memo collection](#book-reader-and-memo-collection) · [Hotkeys](#hotkeys) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Development guide](DEVELOPMENT.en.md)
 
 [한국어](README.md) | **English**
 
@@ -29,7 +29,9 @@
 
 When you learn from subtitles, replaying sentences, keeping a script, and tracking your progress all take extra work. This extension adds a study panel beside the Netflix player and handles all of that in one place.
 
-It lines up the English and Korean subtitles of the current video into a single script, then adds playback controls such as sentence looping and auto-pause, along with study records for each round. Records are stored in the browser's `localStorage`.
+It lines up the English and Korean subtitles of the current video into a single script, then adds playback controls such as sentence looping and auto-pause, along with study records for each round. Paste in the text of an English book to highlight and take notes the same way, and find your Netflix and book notes in one place.
+
+Study records such as rounds and checklists, along with settings, are stored in the Netflix site's `localStorage`. Highlights, notes, and books are stored in the extension's own storage, so notes survive clearing Netflix site data. Uninstalling the extension removes them too, so you can export a backup file.
 
 ## Features
 
@@ -39,9 +41,9 @@ It lines up the English and Korean subtitles of the current video into a single 
 - **Skip silent stretches**: Skip gaps of 5 seconds or more entirely, or use smart skim to jump 5 seconds at a time with a 2-second preview.
 - **Subtitles over the video**: Shows English and Korean subtitles on the player, with each language hideable.
 - **Five-step checklist**: Track pre-study, watching without subtitles, script analysis, shadowing, and composition practice on each page. Add a round to keep its records separate.
-- **Highlights and notes**: Drag over a word or phrase in an English line to highlight it or attach a multi-line note. Click a highlight to reopen its note; the video pauses while a note is open. Notes are saved per video and are kept when you reset study progress.
+- **Highlights and notes**: Drag over a word or phrase in an English line to highlight it or attach a multi-line note. Click a highlight to reopen its note; the video pauses while a note is open. Notes are saved in the extension's storage, so they are kept when you reset study progress or clear Netflix site data, and you can browse them together with book notes in the [memo collection](#book-reader-and-memo-collection).
 - **AI prompt copy**: Copy a pre-study prompt or a composition prompt containing the current page's script, then paste it into an AI chatbot.
-- **Study dashboard**: Adds a tab to the Netflix top menu where you can see your videos, progress, and rounds, and pick up where you left off.
+- **Study dashboard**: Adds a tab to the Netflix top menu where you can see your videos, progress, and rounds, and pick up where you left off. You can also open the book reader and the memo collection from the dashboard.
 
 You can also adjust the panel width, font size, and lines per page (20, 50, 100, or 150).
 
@@ -50,6 +52,16 @@ You can also adjust the panel width, font size, and lines per page (20, 50, 100,
   <br/>
   <sub>The study dashboard. Titles and images are placeholder data.</sub>
 </p>
+
+## Book reader and memo collection
+
+Pages inside the extension let you read English books and browse the notes you left on Netflix and in books. Click the extension icon in the toolbar to open the popup, then click **원서 리더** (book reader) or **메모 모아 보기** (memo collection) to open it in a new tab. The Netflix study dashboard has the same two links.
+
+- **Add a book**: Enter a title (required) and an author (optional), then paste the whole text. **본문 정리** (clean up text, on by default) joins line-end breaks, rejoins words split by hyphens, and splits paragraphs on blank lines. Chapter headings such as `Chapter 1`, `CHAPTER ONE`, `Part 2`, a Roman or Arabic numeral alone on a line, and `Prologue` or `Epilogue` are detected and used to split chapters. Before saving, the preview lets you rename chapters, merge a chapter into the previous one, or start a new chapter at any paragraph. A book can hold up to 2,000,000 characters.
+- **Read a book**: Pick a chapter from the chapter list to see its text paragraph by paragraph. Highlight and take notes the same way as in the Netflix study panel, and see the chapter's notes in **이 장의 메모** (notes in this chapter) beside the text. The reader remembers the last chapter and paragraph for each book and resumes there, and the book list shows progress such as "2/3장" (chapter 2 of 3). Use **가−** and **가+** to change the font size.
+- **Edit the text**: The text cannot be edited after saving. To change it, delete the book from the book list and add it again. Deleting a book also removes its notes and reading position.
+- **Memo collection**: Shows Netflix and book notes in one list, most recently edited first. Search the selected text, note, source text, and title without regard to case, and filter by source (all, Netflix, books, one book, or one video) and by **메모 글이 있는 것만** (only with note text). You can edit or delete notes from the list. **원래 위치로** (go to source) opens the book chapter at the highlight, or opens the Netflix video at that scene in a new tab. Notes whose source text changed are kept and marked "위치를 찾지 못함" (position not found).
+- **Backup**: **백업 내보내기** (export backup) at the top of the page downloads all books, notes, reading positions, and settings as a single `nf-study-backup-YYYYMMDD.json` file. **백업 가져오기** (import backup) asks for confirmation, then merges matching items and keeps whichever was edited last, without deleting anything you already have. A file in the wrong format changes nothing.
 
 ## Hotkeys
 
@@ -79,15 +91,20 @@ flowchart LR
     E <--> G["Player API<br/>time and seeking"]
     E --> H["localStorage<br/>rounds and checklists"]
     H --> I["Study dashboard"]
+    E <--> J["Extension storage<br/>highlights, notes, books"]
+    J <--> K["Book reader<br/>memo collection"]
 ```
 
 The extension's script runs inside the Netflix page and wraps `JSON.parse` to find the video manifest. It picks both subtitle tracks from the manifest, downloads them, and aligns them by time into a script. The panel reads the player's current time with `requestAnimationFrame` to find the active sentence.
 
+Highlights and notes live in the extension's storage (`chrome.storage.local`). The script inside the Netflix page cannot use `chrome.*` APIs, so it sends requests to the content script in the same tab with `window.postMessage`, and the content script checks each request before reading or writing storage. The book reader and the memo collection use the same storage directly. Notes saved earlier in the Netflix `localStorage` are copied into the extension's storage automatically when you open a Netflix page, and the originals are not deleted.
+
 ## Quality
 
-- Vitest and React Testing Library cover subtitle parsing and alignment, playback hooks, hotkeys, data migration, and UI components.
+- Vitest and React Testing Library cover subtitle parsing and alignment, playback hooks, hotkeys, data migration, text cleanup and chapter splitting, memo search, backup, and UI components.
 - TypeScript type checks and ESLint run through npm scripts.
-- Older checklist data is converted to the round-based format when loaded.
+- GitHub Actions runs type checks, ESLint, tests, the build, and a check of the build output (permissions, external resource loads, and so on) on every push and pull request.
+- Older checklist data is converted to the round-based format when loaded. Older notes in the Netflix `localStorage` are copied into the extension's storage, and the originals are kept.
 
 ## Tech stack
 
@@ -98,7 +115,7 @@ The extension's script runs inside the Netflix page and wraps `JSON.parse` to fi
 
 ## Quick start
 
-The extension is not on the Chrome Web Store, so you build and install it yourself. You need Node.js 18 or later and Chrome or another Chromium-based browser.
+The extension is not on the Chrome Web Store, so you build and install it yourself. You need Node.js 24 (recommended, see [.nvmrc](.nvmrc)) and Chrome or another Chromium-based browser.
 
 ```bash
 git clone https://github.com/mivomad33/netflix-subtitle-study.git
@@ -111,8 +128,11 @@ npm run build
 2. Turn on **Developer mode** in the top right.
 3. Click **Load unpacked** and select the `build` folder.
 4. Play a Netflix video that has English and Korean subtitles. The study panel opens on the right.
+5. Click the extension icon in the toolbar to open the book reader or the memo collection.
 
-See the [development guide](DEVELOPMENT.en.md) for the dev server, tests, and stored data.
+The extension ID is fixed by `key` in [manifest.json](src/manifest.json), so moving the `build` folder keeps the same storage. If you installed the extension before the ID was fixed, the ID changes once. Remove the old extension and load the `build` folder again. Your old notes are copied from the Netflix `localStorage` automatically the next time you open Netflix.
+
+See the [development guide](DEVELOPMENT.en.md) for the dev server, tests, CI, and stored data.
 
 ## Project structure
 
@@ -121,13 +141,24 @@ src/
 ├── manifest.json          # Extension settings
 ├── pages/
 │   ├── Background/        # Service worker
-│   ├── ContentLoader/     # Entry that injects the study script
-│   └── Content/           # Study panel, dashboard, playback control
-│       ├── components/    # Panel components
-│       ├── hooks/         # Player integration, hotkeys
-│       └── utils/         # Subtitles, UI injection, layout
+│   ├── ContentLoader/     # Entry that injects the study script, storage relay
+│   ├── Content/           # Study panel, dashboard, playback control
+│   │   ├── components/    # Panel components
+│   │   ├── hooks/         # Player integration, hotkeys
+│   │   └── utils/         # Subtitles, UI injection, layout
+│   ├── Reader/            # Book reader, memo collection, backup
+│   └── Popup/             # Toolbar popup
+├── shared/                # Code shared by the Netflix pages and the book reader
+│   ├── memo/              # Memo model
+│   ├── storage/           # Shared storage, moving old notes
+│   ├── bridge/            # Messages between the Netflix page and storage
+│   ├── text/              # Text cleanup, chapter splitting
+│   └── ui/                # Highlight and note UI
 └── types/                 # Shared types
+scripts/                   # Build output check, performance measurement
 utils/                     # Build and dev server scripts
+.github/workflows/         # CI
+docs/                      # Design baseline, specs
 assets/readme/             # README images
 ```
 

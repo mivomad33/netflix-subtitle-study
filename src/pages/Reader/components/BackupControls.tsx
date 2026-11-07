@@ -64,9 +64,8 @@ export const BackupControls: React.FC<{ onImported: () => void }> = ({ onImporte
         ref={fileRef}
         type="file"
         accept="application/json,.json"
-        className="nfr-visually-hidden"
+        hidden
         aria-label="백업 파일 고르기"
-        tabIndex={-1}
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = '';
