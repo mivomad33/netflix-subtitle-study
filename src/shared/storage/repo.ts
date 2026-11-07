@@ -1,16 +1,17 @@
 import {
   BookMeta,
-  DEFAULT_READER_SETTINGS,
+  ChapterCompletion,
   Memo,
   MemoKind,
   ReaderSettings,
   ReadingPosition,
   isValidBookMeta,
+  isValidCompletion,
   isValidMemo,
   isValidPosition,
-  isValidReaderSettings,
+  normalizeReaderSettings,
 } from '../memo/types';
-import { KEY, PREFIX, chapterKeyPrefix } from './keys';
+import { KEY, PREFIX, chapterKeyPrefix, completionKeyPrefix } from './keys';
 import { StorageArea } from './storageArea';
 
 const keysWithPrefix = async (area: StorageArea, prefix: string) =>
@@ -107,6 +108,7 @@ export async function saveBook(
       id: c.id,
       title: c.title,
       paragraphCount: c.paragraphs.length,
+      charCount: charCount(c.paragraphs),
     })),
   };
   const items: Record<string, unknown> = {};
@@ -126,13 +128,91 @@ export async function countBookMemos(area: StorageArea, bookId: string) {
 export async function deleteBook(area: StorageArea, bookId: string): Promise<void> {
   const keys = await area.getKeys();
   const chapterPrefix = chapterKeyPrefix(bookId);
+  const completionPrefix = completionKeyPrefix(bookId);
   const memos = await listMemosBySource(area, 'book', bookId);
   await area.remove([
     KEY.book(bookId),
     KEY.position(bookId),
-    ...keys.filter((k) => k.startsWith(chapterPrefix)),
+    ...keys.filter((k) => k.startsWith(chapterPrefix) || k.startsWith(completionPrefix)),
     ...memos.map((m) => KEY.memo(m.id)),
   ]);
+}
+
+// ---- 학습 완료와 글자 수 ----
+
+export async function setChapterDone(
+  area: StorageArea,
+  bookId: string,
+  chapterId: string,
+  done: boolean,
+  now = Date.now()
+) {
+  const completion: ChapterCompletion = { bookId, chapterId, done, updatedAt: now };
+  await area.set({ [KEY.completion(bookId, chapterId)]: completion });
+}
+
+// 학습 완료 기록(끈 것 포함). bookId를 주면 그 책 것만.
+export async function listCompletions(
+  area: StorageArea,
+  bookId?: string
+): Promise<ChapterCompletion[]> {
+  const keys = await keysWithPrefix(area, bookId ? completionKeyPrefix(bookId) : PREFIX.completion);
+  if (keys.length === 0) return [];
+  const values = await area.get(keys);
+  return keys
+    .map((k) => values[k])
+    .filter(
+      (v, i): v is ChapterCompletion =>
+        isValidCompletion(v) && KEY.completion(v.bookId, v.chapterId) === keys[i]
+    );
+}
+
+// 책마다 완료한 장 id
+export const doneChapterIds = (completions: ChapterCompletion[], bookId: string) =>
+  new Set(completions.filter((c) => c.bookId === bookId && c.done).map((c) => c.chapterId));
+
+export const charCount = (paragraphs: string[]) => paragraphs.reduce((n, p) => n + p.length, 0);
+
+const hasCharCounts = (book: BookMeta) => book.chapters.every((c) => c.charCount !== undefined);
+
+// 책마다 장별 글자 수. 이 기능 전에 저장한 책(또는 그런 백업에서 가져온 책)은 본문을 한 번 읽어 구하고,
+// 책 정보에 채워 둔다. 그 사이 다른 탭이 책을 바꿨으면(updatedAt이 다르면) 채우지 않는다.
+export async function getBookCharCounts(
+  area: StorageArea,
+  books: BookMeta[]
+): Promise<Map<string, Record<string, number>>> {
+  const result = new Map<string, Record<string, number>>();
+  const countsOf = (book: BookMeta) =>
+    Object.fromEntries(book.chapters.map((c) => [c.id, c.charCount ?? 0]));
+  const missing = books.filter((b) => !hasCharCounts(b));
+  books.filter(hasCharCounts).forEach((b) => result.set(b.id, countsOf(b)));
+  if (missing.length === 0) return result;
+
+  const texts = await getChaptersParagraphs(
+    area,
+    missing.flatMap((b) => b.chapters.map((c) => ({ bookId: b.id, chapterId: c.id })))
+  );
+  const filled = missing.map((book) => ({
+    ...book,
+    chapters: book.chapters.map((c) => ({
+      ...c,
+      charCount: c.charCount ?? charCount(texts[KEY.chapter(book.id, c.id)] ?? []),
+    })),
+  }));
+  filled.forEach((b) => result.set(b.id, countsOf(b)));
+  try {
+    const stored = await area.get(filled.map((b) => KEY.book(b.id)));
+    const items: Record<string, BookMeta> = {};
+    filled.forEach((b) => {
+      const current = stored[KEY.book(b.id)];
+      if (isValidBookMeta(current) && current.updatedAt === b.updatedAt) items[KEY.book(b.id)] = b;
+    });
+    if (Object.keys(items).length > 0) await area.set(items);
+  } catch (e) {
+    // 채우지 못해도 이번 표시는 맞다. 다음에 다시 구한다.
+    console.error('[NF-STUDY] Failed to save character counts:', e);
+  }
+  return result;
 }
 
 // ---- 읽기 위치와 설정 ----
@@ -157,12 +237,14 @@ export async function setPosition(area: StorageArea, position: ReadingPosition) 
 }
 
 export async function getReaderSettings(area: StorageArea): Promise<ReaderSettings> {
-  const value = (await area.get([KEY.readerSettings]))[KEY.readerSettings];
-  return { fontSize: isValidReaderSettings(value) ? value.fontSize : DEFAULT_READER_SETTINGS.fontSize };
+  return normalizeReaderSettings((await area.get([KEY.readerSettings]))[KEY.readerSettings]);
 }
 
-export async function setReaderSettings(area: StorageArea, settings: ReaderSettings) {
-  await area.set({ [KEY.readerSettings]: settings });
+// 바꾼 항목만 넘기면 나머지 설정은 그대로 둔다.
+export async function updateReaderSettings(area: StorageArea, patch: Partial<ReaderSettings>) {
+  const next = { ...(await getReaderSettings(area)), ...patch };
+  await area.set({ [KEY.readerSettings]: next });
+  return next;
 }
 
 // ---- 학습 패널에서 위치를 찾지 못한 넷플릭스 메모 ----

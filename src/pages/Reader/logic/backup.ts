@@ -1,8 +1,9 @@
-// 메모·책·읽기 위치·설정을 파일 하나로 내보내고, 다시 합쳐 넣는다.
+// 메모·책·읽기 위치·학습 완료·설정을 파일 하나로 내보내고, 다시 합쳐 넣는다.
 import { StorageArea } from '../../../shared/storage/storageArea';
 import { KEY, PREFIX, chapterKeyPrefix } from '../../../shared/storage/keys';
 import {
   isValidBookMeta,
+  isValidCompletion,
   isValidMemo,
   isValidPosition,
   isValidReaderSettings,
@@ -89,6 +90,11 @@ function checkEntry(key: string, value: unknown): string | null {
           PREFIX.position.length
         )}"의 값이 올바르지 않습니다.`;
   }
+  if (key.startsWith(PREFIX.completion)) {
+    return isValidCompletion(value) && KEY.completion(value.bookId, value.chapterId) === key
+      ? null
+      : `학습 완료 기록 "${key.slice(PREFIX.completion.length)}"의 값이 올바르지 않습니다.`;
+  }
   return `알 수 없는 항목 "${key}"이 들어 있습니다.`;
 }
 
@@ -166,7 +172,8 @@ export async function mergeBackup(area: StorageArea, backup: Backup) {
   for (const key of fileKeys) {
     const incoming = backup.data[key];
     const isRecord = key.startsWith(PREFIX.memo) || key.startsWith(PREFIX.book);
-    if (!isRecord && !key.startsWith(PREFIX.position)) continue;
+    // 읽기 위치와 학습 완료는 개수에 세지 않고, 키(책·장)마다 나중에 바꾼 쪽을 남긴다.
+    if (!isRecord && !key.startsWith(PREFIX.position) && !key.startsWith(PREFIX.completion)) continue;
     const existing = current[key];
     let take = false;
     if (existing === undefined) {

@@ -27,6 +27,8 @@ export interface ChapterMeta {
   id: string;
   title: string;
   paragraphCount: number;
+  // 장 글자 수(학습 진행률). 이 기능 전에 저장한 책에는 없어서, 처음 볼 때 본문으로 구해 채운다.
+  charCount?: number;
 }
 
 export interface BookMeta {
@@ -47,6 +49,30 @@ export interface ReadingPosition {
 
 export interface ReaderSettings {
   fontSize: number; // pt
+  // 소리 내어 읽기. 없으면 기본값을 쓴다(READ_ALOUD_DEFAULTS).
+  voiceURI?: string;
+  rate?: number;
+  allowOnlineVoices?: boolean;
+  repeat?: boolean;
+  autoPause?: boolean;
+}
+
+export const RATE_MIN = 0.5;
+export const RATE_MAX = 2;
+
+export const READ_ALOUD_DEFAULTS = {
+  rate: 1,
+  allowOnlineVoices: false,
+  repeat: false,
+  autoPause: false,
+} as const;
+
+// 장 하나의 학습 완료. 끈 것도 지우지 않고 done: false로 남겨, 백업을 합칠 때 나중에 바꾼 쪽을 고를 수 있게 한다.
+export interface ChapterCompletion {
+  bookId: string;
+  chapterId: string;
+  done: boolean;
+  updatedAt: number;
 }
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = { fontSize: 14 };
@@ -96,7 +122,13 @@ export function isValidBookMeta(value: unknown): value is BookMeta {
   return b.chapters.every((c) => {
     if (!c || typeof c !== 'object') return false;
     const ch = c as Record<string, unknown>;
-    return isString(ch.id) && ch.id !== '' && isString(ch.title) && isInt(ch.paragraphCount);
+    return (
+      isString(ch.id) &&
+      ch.id !== '' &&
+      isString(ch.title) &&
+      isInt(ch.paragraphCount) &&
+      optional(ch.charCount, isInt)
+    );
   });
 }
 
@@ -111,10 +143,52 @@ export function isValidPosition(value: unknown): value is ReadingPosition {
   );
 }
 
-export const isValidReaderSettings = (value: unknown): value is ReaderSettings => {
-  const fontSize = (value as Partial<ReaderSettings> | null)?.fontSize;
-  return typeof fontSize === 'number' && fontSize >= 8 && fontSize <= 40;
+const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
+const isFontSize = (v: unknown): v is number => typeof v === 'number' && v >= 8 && v <= 40;
+const isRate = (v: unknown): v is number => isNum(v) && v >= RATE_MIN && v <= RATE_MAX;
+
+// 설정의 선택 항목마다 검사. 틀린 항목만 버릴 때와 파일 전체를 검사할 때 함께 쓴다.
+const OPTIONAL_SETTING_CHECKS: Record<Exclude<keyof ReaderSettings, 'fontSize'>, (v: unknown) => boolean> = {
+  voiceURI: isString,
+  rate: isRate,
+  allowOnlineVoices: isBool,
+  repeat: isBool,
+  autoPause: isBool,
 };
+
+export const isValidReaderSettings = (value: unknown): value is ReaderSettings => {
+  if (!value || typeof value !== 'object') return false;
+  const s = value as Record<string, unknown>;
+  return (
+    isFontSize(s.fontSize) &&
+    Object.entries(OPTIONAL_SETTING_CHECKS).every(([k, check]) => optional(s[k], check))
+  );
+};
+
+// 저장소의 값에서 맞는 항목만 남긴다. 글자 크기가 틀리면 기본값을 쓴다.
+export function normalizeReaderSettings(value: unknown): ReaderSettings {
+  const s = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const result: ReaderSettings = {
+    fontSize: isFontSize(s.fontSize) ? s.fontSize : DEFAULT_READER_SETTINGS.fontSize,
+  };
+  Object.entries(OPTIONAL_SETTING_CHECKS).forEach(([k, check]) => {
+    if (s[k] !== undefined && check(s[k])) (result as unknown as Record<string, unknown>)[k] = s[k];
+  });
+  return result;
+}
+
+export function isValidCompletion(value: unknown): value is ChapterCompletion {
+  if (!value || typeof value !== 'object') return false;
+  const c = value as Record<string, unknown>;
+  return (
+    isString(c.bookId) &&
+    c.bookId !== '' &&
+    isString(c.chapterId) &&
+    c.chapterId !== '' &&
+    isBool(c.done) &&
+    isNum(c.updatedAt)
+  );
+}
 
 export function createId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;

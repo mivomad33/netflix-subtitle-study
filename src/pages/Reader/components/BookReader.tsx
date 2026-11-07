@@ -9,7 +9,7 @@ import {
   listMemosBySource,
   putMemo,
   setPosition,
-  setReaderSettings,
+  updateReaderSettings,
 } from '../../../shared/storage/repo';
 import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
 import {
@@ -259,7 +259,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     if (fontSize === null) return;
     const next = Math.min(MAX_FONT, Math.max(MIN_FONT, fontSize + delta));
     setFontSize(next);
-    setReaderSettings(area, { fontSize: next }).catch((e) =>
+    updateReaderSettings(area, { fontSize: next }).catch((e) =>
       console.error('[NF-STUDY] Failed to save reader settings:', e)
     );
   };

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createMemoryArea } from '../storage/storageArea';
-import { putMemo, listMemos, saveBook, getChapterParagraphs, getUnplacedNetflixMemoIds, getBook } from '../storage/repo';
+import { putMemo, listMemos, saveBook, getChapterParagraphs, getUnplacedNetflixMemoIds, getBook, setChapterDone, updateReaderSettings } from '../storage/repo';
 import { netflixMemo, bookMemo } from '../storage/testFixtures';
 import { BRIDGE_REQUEST, parseBridgeRequest } from './protocol';
 import { handleBridgeRequest } from './handler';
@@ -61,6 +61,35 @@ describe('bridge request handling', () => {
     expect((await listMemos(area)).find((m) => m.id === 'b1')!.note).toBe('a pot for boiling water');
     expect(await getChapterParagraphs(area, 'bk1', 'c1')).toEqual(['Keep me.']);
     expect(await getBook(area, 'bk1')).not.toBeNull();
+  });
+
+  it('4.5-3 cannot read, write or delete study completion and reading settings', async () => {
+    const area = createMemoryArea();
+    await saveBook(area, { id: 'bk1', title: 'T', author: '', createdAt: 1, updatedAt: 1 }, [
+      { id: 'c1', title: 'C', paragraphs: ['Keep me.'] },
+    ]);
+    await setChapterDone(area, 'bk1', 'c1', true, 1);
+    await updateReaderSettings(area, { fontSize: 14, allowOnlineVoices: false, voiceURI: 'Daniel' });
+    const protectedKeys = ['done:bk1:c1', 'reader:settings'];
+    const before = await area.get(protectedKeys);
+
+    const attempts: Record<string, unknown>[] = [
+      { op: 'memos.list', videoId: '../done:bk1:c1' },
+      { op: 'memos.delete', id: '../done:bk1:c1' },
+      { op: 'memos.delete', id: 'reader:settings' },
+      { op: 'memos.put', memo: netflixMemo({ id: '../reader:settings' }) },
+      { op: 'memos.reportUnplaced', videoId: '../../done:bk1:c1', ids: [] },
+      { op: 'memos.reportUnplaced', videoId: 'x', ids: ['reader:settings'] },
+      { op: 'settings.set', settings: { allowOnlineVoices: true } },
+      { op: 'completion.set', bookId: 'bk1', chapterId: 'c1', done: false },
+      { op: 'storage.get', keys: protectedKeys },
+    ];
+    for (const body of attempts) {
+      const result = await run(area, body);
+      // 받아들인 요청도 결과에 이 키들의 값이 들어 있지 않다.
+      expect(JSON.stringify(result ?? null)).not.toMatch(/Daniel|"done":true/);
+    }
+    expect(await area.get(protectedKeys)).toEqual(before);
   });
 
   it('records and clears the Netflix memos the panel could not place', async () => {
