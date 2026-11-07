@@ -20,8 +20,15 @@ Webpack Dev Server가 시작되어 변경 사항이 `build` 폴더에 실시간�
 - `?seed=demo`: 직접 쓴 예시 본문으로 책과 메모를 채웁니다.
 - `?seed=perf`: 책 20권(그중 한 권은 200만 자)과 메모 5,000개를 채웁니다.
 - 브라우저 콘솔의 `window.nfStudyDev`에서 `reset()`, `seedDemo()`, `seedPerf()`를 부를 수 있습니다.
+- 소리 내어 읽기는 기본으로 소리를 내지 않는 가짜 음성([fakeSpeech.ts](src/pages/Reader/dev/fakeSpeech.ts))을 씁니다. 글자 수에 맞춰 읽기 시작·끝 신호를 보내므로 읽는 문장 표시와 자동 스크롤을 볼 수 있습니다. `?voices=`로 음성 묶음을 고르고, 고른 값은 새로 고쳐도 남습니다.
+  - `device`(기본): 영어 기기 음성 둘, 한국어 음성, 온라인 영어 음성
+  - `online`: 한국어 기기 음성과 온라인 영어 음성뿐(온라인 음성을 켜야 읽을 수 있음)
+  - `none`: 음성 없음(영어 음성 없음 안내)
+  - `unsupported`: `speechSynthesis`가 없는 브라우저처럼
+  - `real`: 이 브라우저의 실제 음성
+  - 가짜 음성이 읽은 글은 `window.nfStudyDev.speech.spoken`에 시각과 함께 남습니다.
 
-`reader-dev.html`과 메모리 저장소는 개발 빌드에만 들어가며 `npm run build` 결과물에는 들어가지 않습니다. 진입점은 [dev.tsx](src/pages/Reader/dev.tsx)와 [seed.ts](src/pages/Reader/dev/seed.ts)입니다.
+`reader-dev.html`, 메모리 저장소, 가짜 음성은 개발 빌드에만 들어가며 `npm run build` 결과물에는 들어가지 않습니다. 진입점은 [dev.tsx](src/pages/Reader/dev.tsx)와 [seed.ts](src/pages/Reader/dev/seed.ts)입니다. 데모 시드에는 학습 완료한 장이 섞여 있어 진행률 0%, 중간, 100%인 책이 함께 보입니다.
 
 ## 빌드
 
@@ -49,7 +56,7 @@ npm run check:build
 
 - 빌드된 manifest의 권한이 정확히 `storage`와 `unlimitedStorage`이고, `host_permissions`가 없고, `key`가 있고, `chrome_url_overrides`가 없는지
 - 확장 프로그램 화면의 번들에 외부 스크립트·스타일 불러오기나 `fetch`·XHR가 없는지
-- `build`에 개발용 메모리 저장소가 들어가지 않았는지
+- `build`에 개발용 메모리 저장소와 가짜 음성이 들어가지 않았는지(표시 문자열 `NF_STUDY_DEV_STORAGE_SHIM`, `NF_STUDY_FAKE_SPEECH`)
 - git에 `.pem` 파일이나 백업 JSON이 올라가 있지 않은지
 
 ### 성능 측정
@@ -60,7 +67,7 @@ npm run check:build
 node scripts/perf/measure.mjs
 ```
 
-[measure.mjs](scripts/perf/measure.mjs)는 `reader-dev.html?seed=perf`에서 세 가지 시간을 잽니다. 200만 자 본문 미리 보기(3초 이하), 20만 자 장 열기(1초 이하), 메모 5,000개 검색(0.5초 이하)입니다.
+[measure.mjs](scripts/perf/measure.mjs)는 `reader-dev.html?seed=perf`에서 여섯 가지 시간을 잽니다. 200만 자 본문 미리 보기(3초 이하), 20만 자 장 열기(1초 이하), 메모 5,000개 검색(0.5초 이하), 진행률이 들어간 책 목록 열기(1초 이하), 장 글자 수가 없는 예전 모양의 책 20권으로 책 목록을 처음 열기(1초 이하), 20만 자 장에서 "여기서부터 읽기"를 누른 뒤 첫 발화 요청까지(가짜 음성, 0.5초 이하)입니다.
 
 ## CI
 
@@ -75,10 +82,11 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 하이라이트·메모와 원서는 확장 프로그램 자체 저장소 `chrome.storage.local`에 저장합니다. `unlimitedStorage` 권한으로 용량 한도를 풉니다. 넷플릭스 사이트 데이터를 지워도 남지만, 확장 프로그램을 제거하면 지워지므로 원서 리더에 백업 내보내기·가져오기([backup.ts](src/pages/Reader/logic/backup.ts))가 있습니다. 키 이름은 [keys.ts](src/shared/storage/keys.ts)에, 읽고 쓰는 코드는 [repo.ts](src/shared/storage/repo.ts)에, 메모 형식은 [types.ts](src/shared/memo/types.ts)에 있습니다.
 
 - `memo:{id}`: 메모 하나. 메모마다 키가 하나라서 두 탭이 서로 다른 메모를 저장해도 덮어쓰지 않습니다. 넷플릭스 메모와 원서 메모가 같은 형식이며, 원문(문장이나 문단), 원문 안의 위치, 고른 글을 함께 저장해 원문이 같은 곳에만 다시 붙입니다.
-- `book:{id}`: 책 정보(제목, 저자, 장 목록 등)
+- `book:{id}`: 책 정보(제목, 저자, 장 목록 등). 장마다 글자 수 `charCount`가 있어 학습 진행률을 본문을 읽지 않고 계산합니다. 이 항목 전에 저장한 책(또는 그런 백업에서 가져온 책)은 책 목록이나 리더가 처음 열 때 본문을 한 번 읽어 채웁니다.
 - `bookch:{bookId}:{chapterId}`: 한 장의 본문(문단 배열)
 - `pos:{bookId}`: 책의 마지막 읽기 위치(장과 문단)
-- `reader:settings`: 원서 리더 설정(글자 크기)
+- `done:{bookId}:{chapterId}`: 장 하나의 학습 완료(`done`, `updatedAt`). 장마다 키가 하나라서 두 탭이 서로 다른 장을 바꿔도 덮어쓰지 않습니다. 끈 것도 `done: false`로 남겨, 백업을 합칠 때 장마다 나중에 바꾼 쪽을 고릅니다. 책을 지우면 함께 지워집니다.
+- `reader:settings`: 원서 리더 설정. 글자 크기(`fontSize`)와 소리 내어 읽기 설정(`voiceURI`, `rate`, `allowOnlineVoices`, `repeat`, `autoPause`)
 - `meta:legacyMigration`: 예전 메모 옮기기의 진행 기록과 완료 표시
 - `meta:netflixUnplaced:{videoId}`: 학습 패널이 그 영상의 대사에서 찾지 못한 넷플릭스 메모 id 목록. 메모 모아 보기가 "위치를 찾지 못함"을 붙일 때 쓰고, 패널을 열 때마다 다시 쓰므로 백업에는 넣지 않습니다.
 
@@ -118,6 +126,8 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 - 넷플릭스 페이지와 저장소 사이 통신: [src/shared/bridge/](src/shared/bridge/), [storeBridge.ts](src/pages/ContentLoader/storeBridge.ts), [storeClient.ts](src/pages/Content/utils/storeClient.ts)
 - 본문 정리와 장 나누기: [bookText.ts](src/shared/text/bookText.ts)
 - 원서 리더, 메모 모아 보기, 백업: [src/pages/Reader/](src/pages/Reader/)
+- 학습 진행률: [progress.ts](src/pages/Reader/logic/progress.ts), [ProgressBar.tsx](src/pages/Reader/components/ProgressBar.tsx)
+- 소리 내어 읽기: [src/pages/Reader/tts/](src/pages/Reader/tts/)(문장 나누기, 음성 고르기, 크롬 음성 문제를 피하는 발화 관리), [ReadAloud.tsx](src/pages/Reader/components/ReadAloud.tsx)
 - 툴바 팝업: [Popup.tsx](src/pages/Popup/Popup.tsx)
 - 체크리스트: [StudyChecklist.tsx](src/pages/Content/StudyChecklist.tsx)
 - 대시보드: [StudyDashboardModal.tsx](src/pages/Content/StudyDashboardModal.tsx), [dashboardHelper.ts](src/pages/Content/utils/dashboardHelper.ts)

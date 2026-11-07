@@ -58,10 +58,25 @@ You can also adjust the panel width, font size, and lines per page (20, 50, 100,
 Pages inside the extension let you read English books and browse the notes you left on Netflix and in books. Click the extension icon in the toolbar to open the popup, then click **원서 리더** (book reader) or **메모 모아 보기** (memo collection) to open it in a new tab. The Netflix study dashboard has the same two links.
 
 - **Add a book**: Enter a title (required) and an author (optional), then paste the whole text. **본문 정리** (clean up text, on by default) joins line-end breaks, rejoins words split by hyphens, and splits paragraphs on blank lines. Chapter headings such as `Chapter 1`, `CHAPTER ONE`, `Part 2`, a Roman or Arabic numeral alone on a line, and `Prologue` or `Epilogue` are detected and used to split chapters. Before saving, the preview lets you rename chapters, merge a chapter into the previous one, or start a new chapter at any paragraph. A book can hold up to 2,000,000 characters.
-- **Read a book**: Pick a chapter from the chapter list to see its text paragraph by paragraph. Highlight and take notes the same way as in the Netflix study panel, and see the chapter's notes in **이 장의 메모** (notes in this chapter) beside the text. The reader remembers the last chapter and paragraph for each book and resumes there, and the book list shows progress such as "2/3장" (chapter 2 of 3). Use **가−** and **가+** to change the font size.
+- **Read a book**: Pick a chapter from the chapter list to see its text paragraph by paragraph. Highlight and take notes the same way as in the Netflix study panel, and see the chapter's notes in **이 장의 메모** (notes in this chapter) beside the text. The reader remembers the last chapter and paragraph for each book and resumes there, and the book list shows where to continue, such as "이어 읽기: 2장 〈chapter title〉" (continue: chapter 2). Use **가−** and **가+** to change the font size.
+- **Study completion and progress**: Mark a chapter as studied with its check in the chapter list or with **이 장 학습 완료** (mark this chapter studied) at the end of the text; click again to clear it. Completion changes only when you set it, never just because you read or listened to the end. The book list and the reader show progress with a bar, such as "45% · 12장 중 5장 완료" (45%, 5 of 12 chapters studied). Progress is weighted by characters, not by chapter count, so a short preface does not count as much as a long chapter. It reaches 100% only when every chapter is done.
+- **Read aloud**: The reading bar above the text reads the book sentence by sentence with the browser's built-in voices. See [Read aloud](#read-aloud) below.
 - **Edit the text**: The text cannot be edited after saving. To change it, delete the book from the book list and add it again. Deleting a book also removes its notes and reading position.
 - **Memo collection**: Shows Netflix and book notes in one list, most recently edited first. Search the selected text, note, source text, and title without regard to case, and filter by source (all, Netflix, books, one book, or one video) and by **메모 글이 있는 것만** (only with note text). You can edit or delete notes from the list. **원래 위치로** (go to source) opens the book chapter at the highlight, or opens the Netflix video at that scene in a new tab. Notes whose source text changed are kept and marked "위치를 찾지 못함" (position not found).
-- **Backup**: **백업 내보내기** (export backup) at the top of the page downloads all books, notes, reading positions, and settings as a single `nf-study-backup-YYYYMMDD.json` file. **백업 가져오기** (import backup) asks for confirmation, then merges matching items and keeps whichever was edited last, without deleting anything you already have. A file in the wrong format changes nothing.
+- **Backup**: **백업 내보내기** (export backup) at the top of the page downloads all books, notes, reading positions, study completion records, and settings (font size and reading settings) as a single `nf-study-backup-YYYYMMDD.json` file. **백업 가져오기** (import backup) asks for confirmation, then merges matching items and keeps whichever was edited last, without deleting anything you already have. A file in the wrong format changes nothing.
+
+### Read aloud
+
+It uses the browser's built-in voices (Web Speech API), so it is free and needs no new permission.
+
+- **Reading bar**: **재생**·**일시정지**·**정지** (play, pause, stop), **이전 문장**·**다음 문장** (previous and next sentence), rate (0.5x to 2x), voice, **문장 반복** (repeat sentence) and **문장마다 멈춤** (pause after each sentence). Hover over a paragraph and click the ▶ on its left (read from here) to start there. The first play starts at the paragraph you were reading, and play after a pause restarts that sentence from its beginning. While reading, click a sentence in the text to read from it.
+- **Current sentence**: The sentence being read gets a blue background, and the page follows it when it leaves the screen. Scroll yourself and following stops, with a **읽는 곳으로** (back to reading) button to return.
+- **End of chapter**: Reading stops at the end of a chapter and offers **다음 장 읽기** (read next chapter).
+- **Read a selection**: Select text and click **읽기** (read) in the highlight toolbar to hear only that text.
+- **Shadowing**: **문장 반복** repeats the current sentence until you turn it off, and **문장마다 멈춤** stops after each sentence. After repeating it yourself, press play or `D` for the next sentence.
+- **Voices**: Only English voices are listed. Rate, voice, repeat, and pause settings are remembered. If the chosen voice is not available, the default English device voice reads instead.
+- **Online voices**: By default only voices installed on your computer are used. Turn on **온라인 음성도 쓰기** (also use online voices) in **읽기 설정** (reading settings) to list online voices such as Chrome's "Google …" voices, marked "(온라인)" (online). **When you pick an online voice, the text being read is sent to an outside server (such as Google).** Turn it off to go back to device voices.
+- **Getting better English voices (macOS)**: In System Settings › Accessibility › Spoken Content, pick or download an English voice from the **System Voice** menu (voices with a download icon are downloaded from Apple over the internet). Reopen Chrome afterward. When no English voice is available, the reading bar shows this guidance instead.
 
 ## Hotkeys
 
@@ -78,6 +93,17 @@ Hotkeys are ignored while you type in an input field.
 | `A` | Previous sentence | Plays from the start of the previous sentence. |
 | `S` | Current sentence | Replays from the start of the current sentence. |
 | `D` | Next sentence | Plays from the start of the next sentence. |
+
+Read aloud in the book reader uses the same keys. They are ignored in the memo editor, input fields, and select boxes.
+
+| Key | Action | Description |
+| :-: | :-- | :-- |
+| `Space` | Play/pause | A focused button is not pressed again. |
+| `A` | Previous sentence | Reads from the previous sentence. |
+| `S` | Current sentence | Reads the current sentence again from its beginning. |
+| `D` | Next sentence | Reads from the next sentence. |
+| `Q` | Toggle pause after each sentence | Stops after one sentence. |
+| `R` | Toggle repeat sentence | Repeats the current sentence. |
 
 ## How it works
 

@@ -20,8 +20,15 @@ With the dev server running, open `http://localhost:3000/reader-dev.html` to see
 - `?seed=demo`: Fills in books and notes using self-written sample text.
 - `?seed=perf`: Fills in 20 books (one of them 2,000,000 characters) and 5,000 notes.
 - In the browser console, `window.nfStudyDev` provides `reset()`, `seedDemo()`, and `seedPerf()`.
+- Read aloud uses silent fake voices ([fakeSpeech.ts](src/pages/Reader/dev/fakeSpeech.ts)) by default. They send start and end signals timed by text length, so you can see the current-sentence highlight and auto scroll. Pick a voice set with `?voices=`; the choice is kept across reloads.
+  - `device` (default): two English device voices, a Korean voice, and an online English voice
+  - `online`: only a Korean device voice and an online English voice (reading needs online voices turned on)
+  - `none`: no voices (shows the no-English-voice notice)
+  - `unsupported`: like a browser without `speechSynthesis`
+  - `real`: this browser's real voices
+  - What the fake voices read is kept with timestamps in `window.nfStudyDev.speech.spoken`.
 
-`reader-dev.html` and the in-memory store are only built in development and are not part of the `npm run build` output. The entry points are [dev.tsx](src/pages/Reader/dev.tsx) and [seed.ts](src/pages/Reader/dev/seed.ts).
+`reader-dev.html`, the in-memory store, and the fake voices are only built in development and are not part of the `npm run build` output. The entry points are [dev.tsx](src/pages/Reader/dev.tsx) and [seed.ts](src/pages/Reader/dev/seed.ts). The demo seed marks some chapters as studied, so books at 0%, partway, and 100% progress appear together.
 
 ## Build
 
@@ -49,7 +56,7 @@ Use `npm test` to rerun tests as you edit files.
 
 - The built manifest's permissions are exactly `storage` and `unlimitedStorage`, there are no `host_permissions`, `key` is present, and there is no `chrome_url_overrides`.
 - The extension pages' bundles load no external scripts or styles and make no `fetch` or XHR calls.
-- The dev in-memory store is not in `build`.
+- The dev in-memory store and fake voices are not in `build` (marker strings `NF_STUDY_DEV_STORAGE_SHIM` and `NF_STUDY_FAKE_SPEECH`).
 - No `.pem` file or backup JSON is tracked in git.
 
 ### Performance measurement
@@ -60,7 +67,7 @@ Run this while the dev server is running. It uses the Playwright installed in `~
 node scripts/perf/measure.mjs
 ```
 
-[measure.mjs](scripts/perf/measure.mjs) measures three times on `reader-dev.html?seed=perf`: previewing a 2,000,000-character text (3 seconds or less), opening a 200,000-character chapter (1 second or less), and searching 5,000 notes (0.5 seconds or less).
+[measure.mjs](scripts/perf/measure.mjs) measures six times on `reader-dev.html?seed=perf`: previewing a 2,000,000-character text (3 seconds or less), opening a 200,000-character chapter (1 second or less), searching 5,000 notes (0.5 seconds or less), opening the book list with progress (1 second or less), opening the book list for the first time with 20 books in the older shape without chapter character counts (1 second or less), and the time from clicking "read from here" in a 200,000-character chapter to the first speech request (fake voices, 0.5 seconds or less).
 
 ## CI
 
@@ -75,10 +82,11 @@ Data is stored in two places.
 Highlights, notes, and books are stored in the extension's own storage, `chrome.storage.local`. The `unlimitedStorage` permission lifts the size limit. This data survives clearing Netflix site data but is removed when the extension is uninstalled, which is why the book reader has backup export and import ([backup.ts](src/pages/Reader/logic/backup.ts)). Key names are in [keys.ts](src/shared/storage/keys.ts), the read and write code is in [repo.ts](src/shared/storage/repo.ts), and the memo format is in [types.ts](src/shared/memo/types.ts).
 
 - `memo:{id}`: One note. Each note has its own key, so two tabs saving different notes never overwrite each other. Netflix notes and book notes share one format. Each stores the source text (a sentence or a paragraph), the position within it, and the selected text, so it is reattached only where the source text is the same.
-- `book:{id}`: Book information (title, author, chapter list, and so on)
+- `book:{id}`: Book information (title, author, chapter list, and so on). Each chapter has a character count `charCount`, so study progress is computed without reading the text. Books saved before this field existed (or imported from such a backup) get it filled once from their text the first time the book list or the reader opens them.
 - `bookch:{bookId}:{chapterId}`: The text of one chapter (an array of paragraphs)
 - `pos:{bookId}`: The last reading position in a book (chapter and paragraph)
-- `reader:settings`: Book reader settings (font size)
+- `done:{bookId}:{chapterId}`: Study completion of one chapter (`done`, `updatedAt`). Each chapter has its own key, so two tabs changing different chapters never overwrite each other. Clearing keeps the record as `done: false`, so a backup merge can pick whichever change came later for each chapter. Deleting the book removes these too.
+- `reader:settings`: Book reader settings: font size (`fontSize`) and read-aloud settings (`voiceURI`, `rate`, `allowOnlineVoices`, `repeat`, `autoPause`)
 - `meta:legacyMigration`: Progress and completion marker for moving old notes
 - `meta:netflixUnplaced:{videoId}`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
 
@@ -118,6 +126,8 @@ The study script injected into the Netflix page cannot use `chrome.*` APIs, so i
 - Communication between the Netflix page and storage: [src/shared/bridge/](src/shared/bridge/), [storeBridge.ts](src/pages/ContentLoader/storeBridge.ts), [storeClient.ts](src/pages/Content/utils/storeClient.ts)
 - Text cleanup and chapter splitting: [bookText.ts](src/shared/text/bookText.ts)
 - Book reader, memo collection, backup: [src/pages/Reader/](src/pages/Reader/)
+- Study progress: [progress.ts](src/pages/Reader/logic/progress.ts), [ProgressBar.tsx](src/pages/Reader/components/ProgressBar.tsx)
+- Read aloud: [src/pages/Reader/tts/](src/pages/Reader/tts/) (sentence splitting, voice choice, and a speaker that avoids Chrome speech problems), [ReadAloud.tsx](src/pages/Reader/components/ReadAloud.tsx)
 - Toolbar popup: [Popup.tsx](src/pages/Popup/Popup.tsx)
 - Checklist: [StudyChecklist.tsx](src/pages/Content/StudyChecklist.tsx)
 - Dashboard: [StudyDashboardModal.tsx](src/pages/Content/StudyDashboardModal.tsx), [dashboardHelper.ts](src/pages/Content/utils/dashboardHelper.ts)
