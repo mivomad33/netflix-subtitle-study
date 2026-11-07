@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "check:build": "node scripts/check-build.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",
