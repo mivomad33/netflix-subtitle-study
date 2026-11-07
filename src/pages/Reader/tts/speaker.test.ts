@@ -41,6 +41,20 @@ describe('Speaker', () => {
     expect(last().error).toMatch(/음성/);
   });
 
+  it('does not skip a sentence when moving on while no voice is available', () => {
+    let voice: typeof VOICE | null = VOICE;
+    const { fake, speaker, texts } = setup({ autoPause: true });
+    speaker.setOptions({ getVoice: () => voice });
+    speaker.start(0);
+    fake.start();
+    fake.end(); // 문장마다 멈춤
+    voice = null;
+    speaker.next(); // 음성이 없어 2번째 문장에서 멈춘다.
+    voice = VOICE;
+    speaker.resume();
+    expect(texts()).toEqual(['First line.', 'Second line.']);
+  });
+
   it('reads sentence by sentence and stops at the end of the chapter (4.3-4)', () => {
     const { fake, speaker, texts, last } = setup();
     speaker.start(0);

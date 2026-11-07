@@ -200,6 +200,7 @@ export class Speaker {
       // 음성을 정하지 않고 읽으면 브라우저가 온라인 음성을 고를 수 있다(4.4-2). 읽지 않고 멈춘다.
       this.halt('paused');
       this.index = index;
+      this.finishedCurrent = false;
       this.error = NO_VOICE_ERROR;
       this.emit();
       return;
