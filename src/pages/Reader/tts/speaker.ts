@@ -108,20 +108,14 @@ export class Speaker {
   start(index: number) {
     if (index < 0 || index >= this.items.length) return;
     this.mode = 'chapter';
-    this.queue = this.items;
-    this.error = null;
-    this.retries = 0;
-    this.speakAt(index);
+    this.begin(this.items, index);
   }
 
   speakSelection(texts: string[]) {
     const queue = texts.filter((t) => t.trim()).map((text) => ({ text, paragraphIndex: -1, start: 0, end: text.length }));
     if (queue.length === 0) return;
     this.mode = 'selection';
-    this.queue = queue;
-    this.error = null;
-    this.retries = 0;
-    this.speakAt(0);
+    this.begin(queue, 0);
   }
 
   pause() {
@@ -158,12 +152,7 @@ export class Speaker {
   }
 
   next() {
-    if (!this.canMove()) return;
-    if (this.index + 1 < this.items.length) this.speakChapterAt(this.index + 1);
-    else {
-      this.halt('ended');
-      this.emit();
-    }
+    if (this.canMove()) this.advance();
   }
 
   dispose() {
@@ -175,7 +164,11 @@ export class Speaker {
   }
 
   private speakChapterAt(index: number) {
-    this.queue = this.items;
+    this.begin(this.items, index);
+  }
+
+  private begin(queue: SpeechItem[], index: number) {
+    this.queue = queue;
     this.error = null;
     this.retries = 0;
     this.speakAt(index);

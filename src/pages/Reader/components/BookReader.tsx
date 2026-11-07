@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BookMeta, Memo, ReadingPosition, createId, isValidCompletion } from '../../../shared/memo/types';
+import { BookMeta, DEFAULT_READER_SETTINGS, Memo, ReadingPosition, createId, isValidCompletion } from '../../../shared/memo/types';
 import {
   deleteMemo,
   getBook,
@@ -132,7 +132,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [charCounts, setCharCounts] = useState<Record<string, number> | null>(null);
   const [doneSaveFailed, setDoneSaveFailed] = useState<'list' | 'end' | null>(null);
-  const [readSettings, setReadSettings] = useState<ReadAloudSettings>(() => readAloudSettings({ fontSize: 14 }));
+  const [readSettings, setReadSettings] = useState<ReadAloudSettings>(() => readAloudSettings(DEFAULT_READER_SETTINGS));
   // 읽는 문장을 따라 스크롤하는지. 사용자가 직접 스크롤하면 멈춘다(4.3-3).
   const [following, setFollowing] = useState(true);
   const positionRef = useRef<{ chapterId: string; index: number } | null>(null);
@@ -442,7 +442,9 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     if (rect.top >= top && rect.bottom <= window.innerHeight) return;
     autoScrollUntil.current = Date.now() + AUTO_SCROLL_GRACE;
     el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-  }, [following, snapshot]);
+  }, [following, snapshot.mode, snapshot.status, snapshot.index]);
+
+  const doneIds = useMemo(() => new Set(Object.keys(done).filter((id) => done[id])), [done]);
 
   // 읽는 중에 사용자가 직접 스크롤하면 따라가기를 멈춘다.
   useEffect(() => {
@@ -594,7 +596,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   const nextChapter = book.chapters[chapterIndex + 1];
   const chapterDone = !!chapterId && !!done[chapterId];
   const progress = charCounts
-    ? bookProgress(book, charCounts, new Set(Object.keys(done).filter((id) => done[id])))
+    ? bookProgress(book, charCounts, doneIds)
     : null;
   const current = reading ? snapshot.index : -1;
   const currentParagraph = current >= 0 ? sentences.items[current]?.paragraphIndex : -1;
@@ -702,7 +704,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
                 index={index}
                 text={text}
                 memos={own}
-                editingId={editingId}
+                editingId={editing ? editingId : null}
                 onOpenMemo={setEditingId}
                 sentences={speaker ? piecesOf(index) : undefined}
                 currentSentence={index === currentParagraph ? current : -1}

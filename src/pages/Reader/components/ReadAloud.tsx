@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RATE_MAX, RATE_MIN, READ_ALOUD_DEFAULTS, ReaderSettings } from '../../../shared/memo/types';
+import { READ_ALOUD_DEFAULTS, ReaderSettings } from '../../../shared/memo/types';
 import { SentencePiece } from '../../../shared/ui/annotationUi';
 import { splitSentences } from '../tts/sentences';
 import { Speaker, SpeakerSnapshot, SpeechBackend, SpeechItem } from '../tts/speaker';
@@ -113,7 +113,7 @@ export function useReadAloud(
   };
 }
 
-const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].filter((r) => r >= RATE_MIN && r <= RATE_MAX);
+const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]; // RATE_MIN~RATE_MAX 안의 값
 
 export const NO_ENGLISH_VOICE_NOTICE =
   '쓸 수 있는 영어 음성이 없습니다. macOS 시스템 설정 › 손쉬운 사용 › 말하는 콘텐츠(Spoken Content)의 시스템 음성에서 영어 음성을 내려받은 뒤 크롬을 다시 열거나, 읽기 설정에서 온라인 음성을 켜세요.';

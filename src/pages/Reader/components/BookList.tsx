@@ -28,13 +28,12 @@ export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navig
 
   const load = async () => {
     try {
-      const [books, positions, memos, completions] = await Promise.all([
-        listBooks(area),
+      const [{ books, counts }, positions, memos, completions] = await Promise.all([
+        listBooks(area).then(async (books) => ({ books, counts: await getBookCharCounts(area, books) })),
         listPositions(area),
         listMemos(area),
         listCompletions(area),
       ]);
-      const counts = await getBookCharCounts(area, books);
       const positionByBook = new Map(positions.map((p) => [p.bookId, p]));
       const memoCount = new Map<string, number>();
       memos.forEach((m) => {
