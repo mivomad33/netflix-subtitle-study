@@ -26,6 +26,21 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('Speaker', () => {
+  it('4.4-2 never speaks without a chosen voice, so the browser cannot fall back to an online voice', () => {
+    let voice: typeof VOICE | null = VOICE;
+    const { fake, speaker, texts, last } = setup();
+    speaker.setOptions({ getVoice: () => voice });
+    speaker.start(0);
+    fake.start();
+    voice = null; // 온라인 음성을 끄자 쓸 수 있는 음성이 없어졌다.
+    speaker.voiceChanged();
+    fake.end();
+    vi.advanceTimersByTime(60_000);
+    expect(texts()).toEqual(['First line.']);
+    expect(last()).toMatchObject({ status: 'paused', index: 0 });
+    expect(last().error).toMatch(/음성/);
+  });
+
   it('reads sentence by sentence and stops at the end of the chapter (4.3-4)', () => {
     const { fake, speaker, texts, last } = setup();
     speaker.start(0);

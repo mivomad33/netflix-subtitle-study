@@ -55,6 +55,7 @@ export function createBrowserBackend(): SpeechBackend | null {
 }
 
 const MAX_RETRIES = 2;
+const NO_VOICE_ERROR = '쓸 수 있는 영어 음성이 없어서 읽기를 멈췄습니다. 읽기 설정에서 음성을 확인하세요.';
 
 // 끝 신호를 기다리는 시간. 보통 1배속 영어는 1초에 15자 안팎이므로 넉넉히 두 배 넘게 잡는다.
 export const stallTimeoutMs = (text: string, rate: number) => 5000 + (text.length * 150) / Math.max(rate, 0.5);
@@ -194,19 +195,23 @@ export class Speaker {
   private speakAt(index: number) {
     const item = this.queue[index];
     if (!item) return;
+    const voice = this.options.getVoice();
+    if (!voice) {
+      // 음성을 정하지 않고 읽으면 브라우저가 온라인 음성을 고를 수 있다(4.4-2). 읽지 않고 멈춘다.
+      this.halt('paused');
+      this.index = index;
+      this.error = NO_VOICE_ERROR;
+      this.emit();
+      return;
+    }
     this.halt('playing');
     const generation = this.generation;
     this.index = index;
     this.finishedCurrent = false;
-    const voice = this.options.getVoice();
     const u = this.backend.createUtterance(item.text);
     u.rate = this.options.rate;
-    if (voice) {
-      u.voice = voice as SpeechSynthesisVoice;
-      u.lang = voice.lang;
-    } else {
-      u.lang = 'en-US';
-    }
+    u.voice = voice as SpeechSynthesisVoice;
+    u.lang = voice.lang;
     const current = () => generation === this.generation;
     const armStallTimer = () => {
       this.clearTimer();
