@@ -647,13 +647,6 @@ body {
   color: var(--nfr-text-button);
 }
 
-.nfr-read-settings {
-  padding: 10px 12px;
-  border: 1px solid var(--nfr-border);
-  border-radius: var(--nfr-radius);
-  background: var(--nfr-surface-soft);
-}
-
 .nfr-read-settings-note {
   margin: 6px 0 0;
   font-size: 13px;

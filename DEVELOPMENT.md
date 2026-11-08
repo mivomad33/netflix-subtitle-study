@@ -21,8 +21,8 @@ Webpack Dev Server가 시작되어 변경 사항이 `build` 폴더에 실시간�
 - `?seed=perf`: 책 20권(그중 한 권은 200만 자)과 메모 5,000개를 채웁니다.
 - 브라우저 콘솔의 `window.nfStudyDev`에서 `reset()`, `seedDemo()`, `seedPerf()`를 부를 수 있습니다.
 - 소리 내어 읽기는 기본으로 소리를 내지 않는 가짜 음성([fakeSpeech.ts](src/pages/Reader/dev/fakeSpeech.ts))을 씁니다. 글자 수에 맞춰 읽기 시작·끝 신호를 보내므로 읽는 문장 표시와 자동 스크롤을 볼 수 있습니다. `?voices=`로 음성 묶음을 고르고, 고른 값은 새로 고쳐도 남습니다.
-  - `device`(기본): 영어 기기 음성 둘, 한국어 음성, 온라인 영어 음성
-  - `online`: 한국어 기기 음성과 온라인 영어 음성뿐(온라인 음성을 켜야 읽을 수 있음)
+  - `device`(기본): Natural 음성 둘, Premium 음성 하나와 `basic`의 음성들(목록에는 앞의 셋만 보임)
+  - `basic`: 기본 기기 음성 둘, 효과음 음성(Bubbles), 한국어 음성, 온라인 영어 음성(목록에는 기본 음성 둘과 안내가 보임)
   - `none`: 음성 없음(영어 음성 없음 안내)
   - `unsupported`: `speechSynthesis`가 없는 브라우저처럼
   - `real`: 이 브라우저의 실제 음성
@@ -86,7 +86,7 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 - `bookch:{bookId}:{chapterId}`: 한 장의 본문(문단 배열)
 - `pos:{bookId}`: 책의 마지막 읽기 위치(장과 문단)
 - `done:{bookId}:{chapterId}`: 장 하나의 학습 완료(`done`, `updatedAt`). 장마다 키가 하나라서 두 탭이 서로 다른 장을 바꿔도 덮어쓰지 않습니다. 끈 것도 `done: false`로 남겨, 백업을 합칠 때 장마다 나중에 바꾼 쪽을 고릅니다. 책을 지우면 함께 지워집니다.
-- `reader:settings`: 원서 리더 설정. 글자 크기(`fontSize`)와 소리 내어 읽기 설정(`voiceURI`, `rate`, `allowOnlineVoices`, `repeat`, `autoPause`)
+- `reader:settings`: 원서 리더 설정. 글자 크기(`fontSize`)와 소리 내어 읽기 설정(`voiceURI`, `rate`, `repeat`, `autoPause`). 예전의 `allowOnlineVoices`는 쓰지 않지만 저장된 값과 백업은 그대로 받아들인다
 - `meta:legacyMigration`: 예전 메모 옮기기의 진행 기록과 완료 표시
 - `meta:netflixUnplaced:{videoId}`: 학습 패널이 그 영상의 대사에서 찾지 못한 넷플릭스 메모 id 목록. 메모 모아 보기가 "위치를 찾지 못함"을 붙일 때 쓰고, 패널을 열 때마다 다시 쓰므로 백업에는 넣지 않습니다.
 

@@ -36,14 +36,23 @@ export const fakeVoice = (voiceURI: string, lang: string, localService = true, i
   default: isDefault,
 });
 
+// 개발 화면의 음성 묶음. 이름에 따라 목록에 보이는지가 정해진다(voices.ts).
+const BASIC_SET = [
+  fakeVoice('Fake Samantha', 'en-US', true, true),
+  fakeVoice('Fake Daniel', 'en-GB'),
+  fakeVoice('Bubbles', 'en-US'),
+  fakeVoice('Fake Yuna', 'ko-KR'),
+  fakeVoice('Fake Online US English', 'en-US', false),
+];
+
 export const FAKE_VOICE_SETS: Record<string, VoiceLike[]> = {
   device: [
-    fakeVoice('Fake Samantha', 'en-US', true, true),
-    fakeVoice('Fake Daniel', 'en-GB'),
-    fakeVoice('Fake Yuna', 'ko-KR'),
-    fakeVoice('Fake Online US English', 'en-US', false),
+    fakeVoice('Fake US English 1 (Natural)', 'en-US'),
+    fakeVoice('Fake US English 2 (Natural)', 'en-US'),
+    fakeVoice('Fake Ava (Premium)', 'en-US'),
+    ...BASIC_SET,
   ],
-  online: [fakeVoice('Fake Yuna', 'ko-KR', true, true), fakeVoice('Fake Online US English', 'en-US', false)],
+  basic: BASIC_SET,
   none: [],
 };
 

@@ -349,7 +349,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   });
 
   // ---- 소리 내어 읽기 ----
-  const { speaker, snapshot, voices, voice, sentences, piecesOf } = useReadAloud(speech, paragraphs, readSettings);
+  const { speaker, snapshot, voices, basicOnly, voice, sentences, piecesOf } = useReadAloud(speech, paragraphs, readSettings);
   const canRead = !!speaker && !!voice;
   const reading = snapshot.mode === 'chapter' && (snapshot.status === 'playing' || snapshot.status === 'paused');
 
@@ -664,6 +664,7 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
             supported={!!speaker}
             snapshot={snapshot}
             voices={voices}
+            basicOnly={basicOnly}
             voice={voice}
             settings={readSettings}
             following={following}

@@ -36,7 +36,7 @@ export interface SpeakerOptions {
   rate: number;
   repeat: boolean;
   autoPause: boolean;
-  // 발화마다 부른다. 온라인 음성을 허용하지 않았으면 기기 음성만 돌려줘야 한다(4.4-2).
+  // 발화마다 부른다. 기기 음성만 돌려줘야 한다(온라인 음성은 쓰지 않는다).
   getVoice: () => VoiceLike | null;
 }
 
@@ -93,7 +93,7 @@ export class Speaker {
     if (rateChanged) this.voiceChanged();
   }
 
-  // 음성을 바꿨을 때(목록 변경, 온라인 음성 설정) 읽던 문장을 새 음성으로 다시 읽는다.
+  // 음성을 바꿨을 때(목록 변경, 음성 고르기) 읽던 문장을 새 음성으로 다시 읽는다.
   voiceChanged() {
     if (this.status === 'playing') this.speakAt(this.index);
   }
@@ -197,7 +197,7 @@ export class Speaker {
     if (!item) return;
     const voice = this.options.getVoice();
     if (!voice) {
-      // 음성을 정하지 않고 읽으면 브라우저가 온라인 음성을 고를 수 있다(4.4-2). 읽지 않고 멈춘다.
+      // 음성을 정하지 않고 읽으면 브라우저가 온라인 음성을 고를 수 있다. 읽지 않고 멈춘다.
       this.halt('paused');
       this.index = index;
       this.finishedCurrent = false;

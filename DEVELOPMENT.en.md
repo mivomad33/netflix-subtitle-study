@@ -21,8 +21,8 @@ With the dev server running, open `http://localhost:3000/reader-dev.html` to see
 - `?seed=perf`: Fills in 20 books (one of them 2,000,000 characters) and 5,000 notes.
 - In the browser console, `window.nfStudyDev` provides `reset()`, `seedDemo()`, and `seedPerf()`.
 - Read aloud uses silent fake voices ([fakeSpeech.ts](src/pages/Reader/dev/fakeSpeech.ts)) by default. They send start and end signals timed by text length, so you can see the current-sentence highlight and auto scroll. Pick a voice set with `?voices=`; the choice is kept across reloads.
-  - `device` (default): two English device voices, a Korean voice, and an online English voice
-  - `online`: only a Korean device voice and an online English voice (reading needs online voices turned on)
+  - `device` (default): two Natural voices, one Premium voice, and the `basic` voices (only the first three are listed)
+  - `basic`: two plain device voices, a novelty voice (Bubbles), a Korean voice, and an online English voice (the two plain voices are listed with a note)
   - `none`: no voices (shows the no-English-voice notice)
   - `unsupported`: like a browser without `speechSynthesis`
   - `real`: this browser's real voices
@@ -86,7 +86,7 @@ Highlights, notes, and books are stored in the extension's own storage, `chrome.
 - `bookch:{bookId}:{chapterId}`: The text of one chapter (an array of paragraphs)
 - `pos:{bookId}`: The last reading position in a book (chapter and paragraph)
 - `done:{bookId}:{chapterId}`: Study completion of one chapter (`done`, `updatedAt`). Each chapter has its own key, so two tabs changing different chapters never overwrite each other. Clearing keeps the record as `done: false`, so a backup merge can pick whichever change came later for each chapter. Deleting the book removes these too.
-- `reader:settings`: Book reader settings: font size (`fontSize`) and read-aloud settings (`voiceURI`, `rate`, `allowOnlineVoices`, `repeat`, `autoPause`)
+- `reader:settings`: Book reader settings: font size (`fontSize`) and read-aloud settings (`voiceURI`, `rate`, `repeat`, `autoPause`). The old `allowOnlineVoices` is no longer used, but stored values and backups that have it are still accepted
 - `meta:legacyMigration`: Progress and completion marker for moving old notes
 - `meta:netflixUnplaced:{videoId}`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
 

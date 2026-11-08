@@ -7,12 +7,13 @@ import { VoiceLike, pickVoice, usableVoices, voiceLabel } from '../tts/voices';
 
 // 원서 리더의 소리 내어 읽기(4.3, 4.4). 읽기 상태는 Speaker가 갖고, 이 파일은 화면과 잇는다.
 
-export type ReadAloudSettings = Required<Omit<ReaderSettings, 'fontSize' | 'voiceURI'>> & { voiceURI?: string };
+export type ReadAloudSettings = Required<Omit<ReaderSettings, 'fontSize' | 'voiceURI' | 'allowOnlineVoices'>> & {
+  voiceURI?: string;
+};
 
 export const readAloudSettings = (s: ReaderSettings): ReadAloudSettings => ({
   voiceURI: s.voiceURI,
   rate: s.rate ?? READ_ALOUD_DEFAULTS.rate,
-  allowOnlineVoices: s.allowOnlineVoices ?? READ_ALOUD_DEFAULTS.allowOnlineVoices,
   repeat: s.repeat ?? READ_ALOUD_DEFAULTS.repeat,
   autoPause: s.autoPause ?? READ_ALOUD_DEFAULTS.autoPause,
 });
@@ -55,15 +56,9 @@ export function useReadAloud(
     return () => speech.removeEventListener('voiceschanged', update);
   }, [speech]);
 
-  const voices = useMemo(
-    () => usableVoices(allVoices, settings.allowOnlineVoices),
-    [allVoices, settings.allowOnlineVoices]
-  );
-  // 발화마다 이 값을 쓴다. 온라인 음성을 허용하지 않았으면 기기 음성만 나온다(4.4-2).
-  const voice = useMemo(
-    () => pickVoice(allVoices, settings.voiceURI, settings.allowOnlineVoices),
-    [allVoices, settings.voiceURI, settings.allowOnlineVoices]
-  );
+  const { voices, basicOnly } = useMemo(() => usableVoices(allVoices), [allVoices]);
+  // 발화마다 이 값을 쓴다. 기기 음성만 나온다(온라인 음성은 쓰지 않는다).
+  const voice = useMemo(() => pickVoice(allVoices, settings.voiceURI), [allVoices, settings.voiceURI]);
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
 
@@ -107,6 +102,7 @@ export function useReadAloud(
     speaker,
     snapshot,
     voices,
+    basicOnly,
     voice,
     sentences,
     piecesOf: (paragraphIndex: number) => sentences.byParagraph[paragraphIndex] ?? NO_PIECES,
@@ -116,12 +112,16 @@ export function useReadAloud(
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]; // RATE_MIN~RATE_MAX 안의 값
 
 export const NO_ENGLISH_VOICE_NOTICE =
-  '쓸 수 있는 영어 음성이 없습니다. macOS 시스템 설정 › 손쉬운 사용 › 말하는 콘텐츠(Spoken Content)의 시스템 음성에서 영어 음성을 내려받은 뒤 크롬을 다시 열거나, 읽기 설정에서 온라인 음성을 켜세요.';
+  '쓸 수 있는 영어 기기 음성이 없습니다. macOS 시스템 설정 › 손쉬운 사용 › 말하는 콘텐츠(Spoken Content)의 시스템 음성에서 영어 음성을 내려받은 뒤 크롬을 다시 여세요.';
+
+export const BASIC_VOICES_NOTICE =
+  '자연스러운 음성(Natural)이나 고품질 음성(Premium·Enhanced)이 없어 기본 음성을 보여 줍니다. macOS 시스템 설정 › 손쉬운 사용 › 말하는 콘텐츠(Spoken Content)의 시스템 음성에서 고품질 영어 음성을 받을 수 있습니다.';
 
 interface BarProps {
   supported: boolean;
   snapshot: SpeakerSnapshot;
   voices: VoiceLike[];
+  basicOnly: boolean;
   voice: VoiceLike | null;
   settings: ReadAloudSettings;
   following: boolean;
@@ -139,6 +139,7 @@ export const ReadAloudBar: React.FC<BarProps> = ({
   supported,
   snapshot,
   voices,
+  basicOnly,
   voice,
   settings,
   following,
@@ -151,7 +152,6 @@ export const ReadAloudBar: React.FC<BarProps> = ({
   onFollow,
   onReadNextChapter,
 }) => {
-  const [settingsOpen, setSettingsOpen] = useState(false);
   if (!supported) {
     return (
       <div className="nfr-read-bar">
@@ -162,43 +162,12 @@ export const ReadAloudBar: React.FC<BarProps> = ({
   const { status } = snapshot;
   const reading = snapshot.mode === 'chapter' && (status === 'playing' || status === 'paused');
   const playing = status === 'playing';
-  const settingsButton = (
-    <button
-      type="button"
-      className={`nfr-btn ${settingsOpen ? 'nfr-btn-pressed' : ''}`}
-      aria-expanded={settingsOpen}
-      aria-controls="read-settings"
-      onClick={() => setSettingsOpen((open) => !open)}
-    >
-      읽기 설정
-    </button>
-  );
-  const settingsPanel = settingsOpen && (
-    <div className="nfr-read-settings" id="read-settings" role="group" aria-label="읽기 설정">
-      <label className="nfr-check">
-        <input
-          type="checkbox"
-          checked={settings.allowOnlineVoices}
-          onChange={(e) => onChange({ allowOnlineVoices: e.target.checked })}
-        />
-        온라인 음성도 쓰기
-      </label>
-      <p className="nfr-read-settings-note">켜면 읽는 글이 외부(Google 등) 서버로 전송됩니다.</p>
-    </div>
-  );
-
   return (
     <div className="nfr-read-bar">
       {!voice ? (
-        <>
-          <div className="nfr-read-row">
-            <p className="nfr-read-notice" role="status">
-              {NO_ENGLISH_VOICE_NOTICE}
-            </p>
-            {settingsButton}
-          </div>
-          {settingsPanel}
-        </>
+        <p className="nfr-read-notice" role="status">
+          {NO_ENGLISH_VOICE_NOTICE}
+        </p>
       ) : (
         <>
           <div className="nfr-read-row" role="toolbar" aria-label="소리 내어 읽기">
@@ -262,9 +231,8 @@ export const ReadAloudBar: React.FC<BarProps> = ({
                 ))}
               </select>
             </label>
-            {settingsButton}
           </div>
-          {settingsPanel}
+          {basicOnly && <p className="nfr-read-settings-note">{BASIC_VOICES_NOTICE}</p>}
           {snapshot.error && (
             <p className="nfr-error" role="alert">
               {snapshot.error}

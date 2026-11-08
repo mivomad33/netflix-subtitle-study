@@ -39,7 +39,7 @@ function persistentArea(): StorageArea {
 const area = persistentArea();
 const params = new URLSearchParams(window.location.search);
 
-// 소리 내어 읽기: ?voices=device(기본, 영어 기기 음성 있음) | online(온라인 음성만) | none(음성 없음)
+// 소리 내어 읽기: ?voices=device(기본, 좋은 기기 음성 있음) | basic(기본 기기 음성뿐) | none(음성 없음)
 // | unsupported(speechSynthesis 없음) | real(이 브라우저의 실제 음성). 고른 값은 새로 고쳐도 남긴다.
 const VOICES_KEY = 'NF_STUDY_DEV_VOICES';
 const voicesParam = params.get('voices');

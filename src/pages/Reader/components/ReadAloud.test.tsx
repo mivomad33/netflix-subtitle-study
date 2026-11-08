@@ -14,6 +14,7 @@ import { bookMemo } from '../../../shared/storage/testFixtures';
 import { FakeSpeech, asBackend, createFakeSpeech, fakeVoice } from '../dev/fakeSpeech';
 import { ReaderEnvProvider } from '../env';
 import { BookReader } from './BookReader';
+import { BASIC_VOICES_NOTICE } from './ReadAloud';
 
 // 테스트용 책. 글은 직접 쓴 문장이다.
 const BOOK_ID = 'bk1';
@@ -236,8 +237,7 @@ describe('4.3-7 voices that cannot be used', () => {
     ['no voice at all', []],
   ])('shows how to get an English voice with %s', async (_name, voices) => {
     await setup({ voices });
-    expect(screen.getByRole('status')).toHaveTextContent('영어 음성');
-    expect(screen.getByRole('status')).toHaveTextContent('온라인 음성');
+    expect(screen.getByRole('status')).toHaveTextContent('영어 기기 음성');
     expect(screen.queryByRole('button', { name: /재생/ })).toBeNull();
     expect(screen.queryAllByRole('button', { name: '여기서부터 읽기' })).toEqual([]);
   });
@@ -355,31 +355,29 @@ describe('4.3-10 shadowing', () => {
   });
 });
 
-describe('4.4 online voices', () => {
-  const openSettings = () => fireEvent.click(screen.getByRole('button', { name: '읽기 설정' }));
+describe('good device voices only', () => {
+  const NATURAL = fakeVoice('Fake US English 1 (Natural)', 'en-US');
+  const NATURAL_2 = fakeVoice('Fake US English 2 (Natural)', 'en-US');
+  const ODD = fakeVoice('Bubbles', 'en-US');
+  const names = () => within(screen.getByLabelText('음성')).getAllByRole('option').map((o) => o.textContent);
 
-  it('4.4-1 shows device voices first and online voices with a label after turning the setting on', async () => {
-    const { area, view } = await setup();
-    const names = () => within(screen.getByLabelText('음성')).getAllByRole('option').map((o) => o.textContent);
-    expect(names()).toEqual(['Fake Samantha (en-US)', 'Fake Daniel (en-GB)']);
-    openSettings();
-    expect(screen.getByText('켜면 읽는 글이 외부(Google 등) 서버로 전송됩니다.')).toBeInTheDocument();
-    const toggle = screen.getByRole('checkbox', { name: '온라인 음성도 쓰기' }) as HTMLInputElement;
-    expect(toggle.checked).toBe(false);
-    fireEvent.click(toggle);
-    expect(names()).toEqual(['Fake Samantha (en-US)', 'Fake Daniel (en-GB)', 'Fake Online English (en-US) (온라인)']);
-    await waitFor(async () => expect((await getReaderSettings(area)).allowOnlineVoices).toBe(true));
-    view.unmount();
-
-    renderReader(area, createFakeSpeech({ voices: VOICES }));
-    await waitForBody();
-    openSettings();
-    expect((screen.getByRole('checkbox', { name: '온라인 음성도 쓰기' }) as HTMLInputElement).checked).toBe(true);
+  it('lists only natural voices when they exist, without a settings switch for online voices', async () => {
+    await setup({ voices: [...VOICES, ODD, NATURAL_2, NATURAL] });
+    expect(names()).toEqual(['Fake US English 1 (Natural) (en-US)', 'Fake US English 2 (Natural) (en-US)']);
+    expect(screen.queryByRole('button', { name: '읽기 설정' })).toBeNull();
+    expect(screen.queryByText(BASIC_VOICES_NOTICE)).toBeNull();
   });
 
-  it('4.4-2 never speaks with an online voice while the setting is off, on every path', async () => {
+  it('shows plain device voices with a notice when no good voice exists', async () => {
+    await setup({ voices: [...VOICES, ODD] });
+    expect(names()).toEqual(['Fake Samantha (en-US)', 'Fake Daniel (en-GB)']);
+    expect(screen.getByText(BASIC_VOICES_NOTICE)).toBeInTheDocument();
+  });
+
+  it('never speaks with an online voice, even when an old setting allowed it, on every path', async () => {
     const { fake, view } = await setup({
-      prepare: (area) => updateReaderSettings(area, { voiceURI: ONLINE.voiceURI, allowOnlineVoices: false }),
+      voices: [...VOICES, NATURAL],
+      prepare: (area) => updateReaderSettings(area, { voiceURI: ONLINE.voiceURI, allowOnlineVoices: true }),
     });
     play(); // 재생
     fireEvent.keyDown(window, { code: 'KeyD', key: 'd' }); // 단축키
@@ -393,21 +391,6 @@ describe('4.4 online voices', () => {
     fireEvent.mouseUp(view.container.querySelector('[data-paragraph-index="0"] p.annotatable')!);
     fireEvent.click(screen.getByRole('button', { name: '읽기' })); // 고른 글 읽기
     expect(fake.spoken.length).toBe(5);
-    expect(fake.spoken.map((s) => s.voiceURI)).toEqual(Array(5).fill('Fake Samantha'));
-  });
-
-  it('4.4-2 speaks with the online voice when the setting is on, and falls back when it is turned off', async () => {
-    const { fake } = await setup({
-      prepare: (area) => updateReaderSettings(area, { voiceURI: ONLINE.voiceURI, allowOnlineVoices: true }),
-    });
-    play();
-    expect(fake.spoken[0].voiceURI).toBe(ONLINE.voiceURI);
-    openSettings();
-    fireEvent.click(screen.getByRole('checkbox', { name: '온라인 음성도 쓰기' }));
-    // 읽던 문장을 기기 음성으로 다시 읽는다.
-    expect(fake.spoken[fake.spoken.length - 1].voiceURI).toBe('Fake Samantha');
-    finish(fake);
-    expect(fake.spoken[fake.spoken.length - 1]).toMatchObject({ text: 'The bus is late.', voiceURI: 'Fake Samantha' });
-    expect((screen.getByLabelText('음성') as HTMLSelectElement).value).toBe('Fake Samantha');
+    expect(fake.spoken.map((s) => s.voiceURI)).toEqual(Array(5).fill(NATURAL.voiceURI));
   });
 });

@@ -52,6 +52,7 @@ export interface ReaderSettings {
   // 소리 내어 읽기. 없으면 기본값을 쓴다(READ_ALOUD_DEFAULTS).
   voiceURI?: string;
   rate?: number;
+  // 예전에 쓰던 항목(온라인 음성 허용). 지금은 쓰지 않지만, 저장된 값과 백업은 그대로 받아들인다.
   allowOnlineVoices?: boolean;
   repeat?: boolean;
   autoPause?: boolean;
@@ -62,7 +63,6 @@ export const RATE_MAX = 2;
 
 export const READ_ALOUD_DEFAULTS = {
   rate: 1,
-  allowOnlineVoices: false,
   repeat: false,
   autoPause: false,
 } as const;
