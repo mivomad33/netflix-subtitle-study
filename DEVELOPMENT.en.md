@@ -15,8 +15,11 @@ Webpack Dev Server starts and keeps the `build` folder up to date as you edit. L
 
 ### Viewing the book reader pages
 
-With the dev server running, open `http://localhost:3000/reader-dev.html` to see the book reader, memo collection, and backup pages without loading the extension. This page uses an in-memory store instead of `chrome.*` and saves its contents to that page's `localStorage`.
+With the dev server running, open `http://localhost:3000/reader-dev.html` to see the book reader, memo collection, and backup pages without loading the extension. Instead of the service worker and Firestore, this page uses an in-memory store and a signed-in fake user ([fakeAuth.ts](src/pages/Reader/dev/fakeAuth.ts)), and saves the store's contents to that page's `localStorage`.
 
+- `?auth=signedOut`, `?auth=loading`, `?auth=unconfigured`, `?auth=expired`: Show the signed-out, checking sign-in, Firebase not configured, and sign-in expired screens.
+- `?signin=cancelled`: Sign-in fails as if the sign-in window had been closed.
+- `?usage=full`: Usage appears to have reached the 20 MB limit.
 - `?seed=demo`: Fills in books and notes using self-written sample text.
 - `?seed=perf`: Fills in 20 books (one of them 2,000,000 characters) and 5,000 notes.
 - In the browser console, `window.nfStudyDev` provides `reset()`, `seedDemo()`, and `seedPerf()`.
@@ -28,7 +31,18 @@ With the dev server running, open `http://localhost:3000/reader-dev.html` to see
   - `real`: this browser's real voices
   - What the fake voices read is kept with timestamps in `window.nfStudyDev.speech.spoken`.
 
-`reader-dev.html`, the in-memory store, and the fake voices are only built in development and are not part of the `npm run build` output. The entry points are [dev.tsx](src/pages/Reader/dev.tsx) and [seed.ts](src/pages/Reader/dev/seed.ts). The demo seed marks some chapters as studied, so books at 0%, partway, and 100% progress appear together.
+`reader-dev.html`, the in-memory store, the fake voices, and the fake sign-in are only built in development and are not part of the `npm run build` output. The entry points are [dev.tsx](src/pages/Reader/dev.tsx) and [seed.ts](src/pages/Reader/dev/seed.ts). The demo seed marks some chapters as studied, so books at 0%, partway, and 100% progress appear together.
+
+### Viewing the Netflix study panel
+
+With the dev server running, open `http://localhost:3000/netflix-dev.html` to see the study panel and the dashboard outside Netflix. It uses self-written fake lines and a fake player, and connects an in-memory store directly to the bridge handler instead of the service worker. It starts signed in.
+
+- `?auth=out`: Signed out (shows the sign-in notice)
+- `?auth=wait`: Still checking sign-in
+- `?error=<error code>`: Saves fail with that error. Error codes are in [errors.ts](src/shared/storage/errors.ts), such as `quota-exceeded`, `resource-exhausted`, `unavailable`, and `unauthenticated`.
+- `?dashboard=1`: Starts with the dashboard open.
+
+The entry point is [dev.tsx](src/pages/Content/dev.tsx), and it is only built in development.
 
 ## Build
 
@@ -38,7 +52,46 @@ npm run build
 
 This writes the output to the `build` folder and a release archive to the `zip` folder.
 
-The extension ID is fixed by `key` in [manifest.json](src/manifest.json) (`flhkacfjjpipfoicbnmednajnhebihmb`), so moving or reloading the `build` folder keeps the same `chrome.storage.local`.
+The extension ID is fixed by `key` in [manifest.json](src/manifest.json) (`flhkacfjjpipfoicbnmednajnhebihmb`), so moving or reloading the `build` folder keeps the same ID. The Google sign-in redirect address (`https://flhkacfjjpipfoicbnmednajnhebihmb.chromiumapp.org/`) and the Firebase Authentication authorized domain (`chrome-extension://flhkacfjjpipfoicbnmednajnhebihmb`) are set up for this ID.
+
+### Firebase config
+
+At build time, [webpack.config.js](webpack.config.js) reads the Firebase web config from `firebase.config.local.json` (JSON) at the repository root and puts it in the bundles. The file is in `.gitignore` and is never committed. Instead of the file, you can put the same JSON in the `NF_FIREBASE_CONFIG` environment variable, or point `NF_FIREBASE_CONFIG_FILE` at another file path (`NF_FIREBASE_CONFIG` takes precedence).
+
+If you have access to this project (`nf-subtitle-study-21cae`), create the file with the Firebase CLI. Without `--out`, the same JSON is printed to the screen.
+
+```bash
+npx firebase-tools login
+npx firebase-tools apps:sdkconfig WEB 1:777101314338:web:f8782f201bed5f99347d7b --project nf-subtitle-study-21cae --out firebase.config.local.json
+```
+
+The build uses only `apiKey`, `authDomain`, `projectId`, `appId`, `oauthClientId`, and `siteUrl` from the JSON and drops other fields. If any of `apiKey`, `projectId`, or `appId` is missing, the config is treated as absent. The two fields below are optional; without them, this project's values are used ([config.ts](src/shared/firebase/config.ts)).
+
+- `oauthClientId`: The web OAuth client ID used by the Google sign-in window
+- `siteUrl`: The site that hosts the privacy policy (`/privacy/`) and the copyright notice (`/copyright/`). Defaults to `https://nf-subtitle-study-21cae.web.app`
+
+`npm run build` succeeds without the config file (this is the CI case). That build gets an empty value in place of the config and runs without Firebase: the book reader and the memo collection show "Firebase 설정이 없습니다" (Firebase is not configured) instead of sign-in, and on Netflix only the subtitle study features work, with default settings, as when signed out.
+
+### Building with your own Firebase project
+
+If you cannot get this project's config, create your own Firebase project and build with its config. The extension ID below is `flhkacfjjpipfoicbnmednajnhebihmb` (if you changed `key`, use the new ID).
+
+1. Create a project in the [Firebase console](https://console.firebase.google.com/). The free Spark plan is enough.
+2. Create a Cloud Firestore database.
+3. In Authentication, enable the Google sign-in provider and add `chrome-extension://<extension ID>` to the authorized domains.
+4. Register a web app.
+5. In the Google Cloud console, set up the OAuth consent screen, and add `https://<extension ID>.chromiumapp.org/` to the authorized redirect URIs of a web application OAuth client.
+6. From the repository root, deploy the security rules and index settings: `npx firebase-tools deploy --only firestore:rules,firestore:indexes --project <project ID>`
+7. Create the config file with `npx firebase-tools apps:sdkconfig WEB <web app ID> --project <project ID> --out firebase.config.local.json`, then add the client ID from step 5 to the JSON as `oauthClientId`. If you host your own policy pages, add `siteUrl` too.
+8. Build with `npm run build`.
+
+### Deploying security rules and Hosting
+
+The security rules ([firestore.rules](firestore.rules)), the index settings ([firestore.indexes.json](firestore.indexes.json)), and the privacy policy and copyright notice pages ([site/](site/)) are deployed with [firebase.json](firebase.json) at the repository root. Hosting serves the `site` folder. The default project is `nf-subtitle-study-21cae` in [.firebaserc](.firebaserc).
+
+```bash
+npx firebase-tools deploy --only firestore:rules,firestore:indexes,hosting
+```
 
 ## Checks and tests
 
@@ -54,10 +107,42 @@ Use `npm test` to rerun tests as you edit files.
 
 `npm run check:build` ([check-build.mjs](scripts/check-build.mjs)) checks the output after `npm run build`:
 
-- The built manifest's permissions are exactly `storage` and `unlimitedStorage`, there are no `host_permissions`, `key` is present, and there is no `chrome_url_overrides`.
-- The extension pages' bundles load no external scripts or styles and make no `fetch` or XHR calls.
-- The dev in-memory store and fake voices are not in `build` (marker strings `NF_STUDY_DEV_STORAGE_SHIM` and `NF_STUDY_FAKE_SPEECH`).
-- No `.pem` file or backup JSON is tracked in git.
+- The built manifest's permissions are exactly `storage`, `unlimitedStorage`, and `identity`, there are no `host_permissions`, `key` is present, and there is no `chrome_url_overrides`.
+- The bundles connect only to external addresses on the allow list (Firestore, Firebase authentication, Google sign-in, the policy site) and load no external scripts or styles. Addresses that are never connected to (page links, library error messages, and so on) must also be listed, and any external address not on a list fails the check.
+- The bundles injected into the Netflix page contain no Firebase code.
+- The dev in-memory store, fake voices, fake sign-in, and the E2E build's emulator connection code are not in `build` (marker strings `NF_STUDY_DEV_STORAGE_SHIM`, `NF_STUDY_FAKE_SPEECH`, `NF_STUDY_DEV_FAKE_AUTH`, and `NF_STUDY_E2E_EMULATOR_LOGIN`).
+- Neither the build output nor the files tracked in git contain a service account key or an OAuth client secret (`scripts/check-build.mjs` lists the patterns).
+- No `.pem` file, backup JSON, `firebase.config.local.json`, or Firebase log file is tracked in git.
+
+### Emulator tests
+
+```bash
+npm run test:emulator
+```
+
+This starts the Firebase emulators (Auth on 9099, Firestore on 8080, project `demo-nf-study`) with `firebase emulators:exec` and runs the `*.emulator.test.ts` files ([vitest.emulator.config.ts](vitest.emulator.config.ts)). They test the security rules ([rules.emulator.test.ts](src/test/rules.emulator.test.ts)), Firestore storage, backup, and account deletion. Because it is a `demo-` project, no real Firebase project, config file, or sign-in is needed.
+
+The emulators need Java 21. On macOS with `openjdk@21` installed through Homebrew, add it to PATH first.
+
+```bash
+export PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH
+```
+
+### E2E tests
+
+```bash
+npm run test:e2e
+```
+
+This runs `npm run build` (into `build`, with this computer's config file) and `npm run build:e2e` (a build that connects to the emulators, into `build-e2e`), then starts the emulators and runs [extension.e2e.test.ts](e2e/extension.e2e.test.ts) ([vitest.e2e.config.ts](vitest.e2e.config.ts)). It loads the extension into Chromium with Playwright and checks that:
+
+- The real build's book reader shows the sign-in button and the policy links before sign-in.
+- Signing out clears the Firestore cache, so nothing of the previous account is shown.
+- The Netflix side still receives changes from another client after the service worker stops and reconnects.
+
+It runs only locally and is not part of CI. It needs Java 21 and the Firebase config file (because it checks the real build's sign-in screen). Playwright is loaded from `~/.cache/design-tools/node_modules/playwright/index.mjs`; set `PLAYWRIGHT_MODULE` to use another path. Screenshots are saved to `docs/specs/20261108-0925-firebase-sync/screens/`.
+
+`npm run build:e2e` (`NF_E2E=1`) uses a demo config that connects to the emulators (`127.0.0.1`) and includes a service worker ([e2e.ts](src/pages/Background/e2e.ts)) that signs in with a fake Google account chosen by the test instead of the sign-in window. It is a test-only build, not for installing.
 
 ### Performance measurement
 
@@ -71,50 +156,68 @@ node scripts/perf/measure.mjs
 
 ## CI
 
-GitHub Actions ([ci.yml](.github/workflows/ci.yml)) runs `npm ci`, type checks, ESLint, tests, the build, and `check:build` in order on every push and pull request. The Node version is pinned in [.nvmrc](.nvmrc) (24).
+GitHub Actions ([ci.yml](.github/workflows/ci.yml)) runs `npm ci`, type checks, ESLint, tests, the emulator tests (with Java 21 installed and the emulator files cached), the build, and `check:build` in order on every push and pull request. The build runs without the Firebase config file and needs no secret values. The E2E tests are not run. The Node version is pinned in [.nvmrc](.nvmrc) (24).
 
 ## Stored data
 
-Data is stored in two places.
+All study data is stored in the signed-in user's area `users/{uid}` of Cloud Firestore in Seoul (`asia-northeast3`). Inside the extension, Firebase (sign-in and Firestore) runs only in the service worker, and pages and the content script ask the service worker over `chrome.runtime` ports.
 
-### Extension storage
+### Firestore document layout
 
-Highlights, notes, and books are stored in the extension's own storage, `chrome.storage.local`. The `unlimitedStorage` permission lifts the size limit. This data survives clearing Netflix site data but is removed when the extension is uninstalled, which is why the book reader has backup export and import ([backup.ts](src/pages/Reader/logic/backup.ts)). Key names are in [keys.ts](src/shared/storage/keys.ts), the read and write code is in [repo.ts](src/shared/storage/repo.ts), and the memo format is in [types.ts](src/shared/memo/types.ts).
+Pages and storage code read and write by key name. Key names are in [keys.ts](src/shared/storage/keys.ts), the read and write code is in [repo.ts](src/shared/storage/repo.ts), and the memo format is in [types.ts](src/shared/memo/types.ts). [firestoreLayout.ts](src/shared/storage/firestoreLayout.ts) maps keys to Firestore documents, and [firestoreArea.ts](src/shared/storage/firestoreArea.ts) reads and writes them in the service worker. Documents live in two collections.
 
-- `memo:{id}`: One note. Each note has its own key, so two tabs saving different notes never overwrite each other. Netflix notes and book notes share one format. Each stores the source text (a sentence or a paragraph), the position within it, and the selected text, so it is reattached only where the source text is the same.
-- `book:{id}`: Book information (title, author, chapter list, and so on). Each chapter has a character count `charCount`, so study progress is computed without reading the text. Books saved before this field existed (or imported from such a backup) get it filled once from their text the first time the book list or the reader opens them.
-- `bookch:{bookId}:{chapterId}`: The text of one chapter (an array of paragraphs)
-- `pos:{bookId}`: The last reading position in a book (chapter and paragraph)
-- `done:{bookId}:{chapterId}`: Study completion of one chapter (`done`, `updatedAt`). Each chapter has its own key, so two tabs changing different chapters never overwrite each other. Clearing keeps the record as `done: false`, so a backup merge can pick whichever change came later for each chapter. Deleting the book removes these too.
-- `reader:settings`: Book reader settings: font size (`fontSize`) and read-aloud settings (`voiceURI`, `rate`, `repeat`, `autoPause`). The old `allowOnlineVoices` is no longer used, but stored values and backups that have it are still accepted
-- `meta:legacyMigration`: Progress and completion marker for moving old notes
-- `meta:netflixUnplaced:{videoId}`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
+- `users/{uid}/kv/{docId}`: Documents that group small data. Each has a single field `e` (a map from entry name to value). The service worker subscribes to the whole `kv` collection once and keeps it in memory, so numerous items such as notes are grouped into a few documents to keep reads down. Writes go per map entry, so two tabs saving different entries of the same document never overwrite each other.
+- `users/{uid}/ch/{docId}`: Chapter text chunks. Text is large and only needed when a chapter opens, so it is kept separately. The fields are `t` (part of the text JSON), `i` (chunk number), `n` (chunk count), and `v` (version).
+
+Each key is stored as follows. Book, chapter, and video ids in document ids are URL-encoded.
+
+- `memo:{id}` → entry `{id}` of `kv/memos-{0-31}`: One note. Notes are spread over 32 documents by a hash (FNV-1a) of the note id. Netflix notes and book notes share one format. Each stores the source text (a sentence or a paragraph), the position within it, and the selected text, so it is reattached only where the source text is the same.
+- `book:{id}` → entry `m` of `kv/book-{id}`: Book information (title, author, chapter list, and so on). Each chapter has a character count `charCount`, so study progress is computed without reading the text. Books without it (such as books imported from older backups) get it filled once from their text the first time the book list or the reader opens them.
+- `bookch:{bookId}:{chapterId}` → `ch/{bookId:chapterId}~{chunk number}`: The text of one chapter (an array of paragraphs), stored as JSON split into chunks of 300,000 characters (up to 100 chunks). Each chapter's chunk count, version, and stored size are kept in `kv/chsizes`, and when the same chapter opens again with the same version, the chunks come from the Firestore cache.
+- `pos:{bookId}` → entry `{bookId}` of `kv/positions`: The last reading position in a book (chapter and paragraph)
+- `done:{bookId}:{chapterId}` → entry `{bookId}:{chapterId}` of `kv/done-{0-7}`: Study completion of one chapter (`done`, `updatedAt`). Clearing keeps the record as `done: false`, so a backup merge can pick whichever change came later for each chapter. Deleting the book removes these too.
+- `reader:settings` → entry `reader` of `kv/settings`: Book reader settings: font size (`fontSize`) and read-aloud settings (`voiceURI`, `rate`, `repeat`, `autoPause`). The old `allowOnlineVoices` is no longer used, but stored values and backups that have it are still accepted.
+- `nf:settings` → entry `netflix` of `kv/settings`: One object of Netflix study panel settings (panel, overlay subtitle, and per-language subtitle visibility, auto-pause, page-end pause, skipping silent stretches, smart skim, sentence loop, font size, panel width ratio). Its shape is in [netflixRecords.ts](src/shared/bridge/netflixRecords.ts).
+- `nf:checklist:{videoId}` → entry `{videoId}` of `kv/nf-checklists`: Five-step checklist for each round and page of a video
+- `nf:itemsPerPage:{videoId}` → entry `{videoId}` of `kv/nf-pages`: Lines per page for a video
+- `nf:studied:{videoId}` → entry `{videoId}` of `kv/nf-studied`: Metadata for a studied video (ID, title, cover image, total pages, update time, and so on)
+- `meta:netflixUnplaced:{videoId}` → entry `ids` of `kv/nfu-{videoId}`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
+
+### Storage limit and security rules
+
+- The app sizes documents following [how Firestore calculates storage size](https://firebase.google.com/docs/firestore/storage-size) (adding the document id index share so it never counts less than the real size). If the total after a write would exceed 20 MB (20×1024×1024 bytes), the write is not sent and fails with a `quota-exceeded` error. The book reader shows this usage.
+- When Firestore returns a free quota error (`resource-exhausted`), the pages show a notice that the daily limits reset at midnight Pacific time, with a retry button. Pages pick notices by error code and never show the original error text ([storageErrors.ts](src/shared/ui/storageErrors.ts)).
+- The security rules ([firestore.rules](firestore.rules)) let a signed-in user read and write only their own `users/{uid}` and deny everything else. Rules cannot measure a document's size in bytes, so they cap document id shapes, map entry counts, list lengths, and string lengths.
+- Field indexes are turned off in [firestore.indexes.json](firestore.indexes.json).
+
+### Sign-in and account deletion
+
+- The service worker ([googleSignIn.ts](src/pages/Background/googleSignIn.ts)) opens the Google sign-in window with `chrome.identity.launchWebAuthFlow` (scope `openid email`) to get an ID token, and [backend.ts](src/pages/Background/backend.ts) signs in to Firebase Authentication with it. Signing in to the Chrome profile is not needed. The sign-in state is kept in the service worker's IndexedDB, so it survives restarting Chrome.
+- The Firestore cache (IndexedDB) is cleared on sign-out and on account deletion.
+- Account deletion ([account.ts](src/pages/Background/account.ts)) deletes all of the user's Firestore documents first and the Firebase account last. If a recent sign-in is required, it reauthenticates through the sign-in window, and if it is interrupted, deleting again removes the remaining data first.
+
+### Backup file
+
+The backup file made by [backup.ts](src/pages/Reader/logic/backup.ts) has format `nf-study-backup`, version 2, and holds every key above except `meta:` ones in `data`, under their key names. Version 2 added the Netflix study records (`nf:` keys), and version 1 files are still accepted. Import keeps whichever side has the newer `updatedAt` for each key, deletes nothing, and refuses the import if the total after merging would exceed 20 MB.
+
+### Removing old local data
+
+The updated extension does not move data that earlier versions kept on this computer into Firestore; it deletes it.
+
+- The first time the service worker runs, [localCleanup.ts](src/pages/Background/localCleanup.ts) removes keys starting with `memo:`, `book:`, `bookch:`, `pos:`, `done:`, or `meta:` and the `reader:settings` key from `chrome.storage.local`, then sets the marker `cleanup:localData:v1` so it does not run again. Study data is no longer kept in `chrome.storage.local`.
+- Every time a Netflix page opens, [legacyCleanup.ts](src/pages/Content/utils/legacyCleanup.ts) removes the old study record keys listed in [storageKeys.ts](src/pages/Content/constants/storageKeys.ts) from the Netflix `localStorage`: `NF_studied_videos`, `NF_isPanelVisible`, `NF_isOverlayVisible`, `NF_isEnglishVisible`, `NF_isKoreanVisible`, `NF_isAutoPause`, `NF_isPageEndPause`, `NF_isAutoSkip`, `NF_isSmartSkim`, `NF_isSentenceLoop`, `NF_fontSize`, `NF_studyPanelWidthRatio`, and keys starting with `NF_itemsPerPage_`, `NF_checklist_`, or `NF_annotations_`. New code never uses these keys, so they are removed every time without a marker. Unlisted keys and Netflix's own keys are left alone.
 
 ### Netflix localStorage
 
-Study records and settings stay in the `localStorage` of the Netflix page as before. Key names are collected in [storageKeys.ts](src/pages/Content/constants/storageKeys.ts).
+Only two values used for subtitle handling remain in the Netflix page's `localStorage` ([storageKeys.ts](src/pages/Content/constants/storageKeys.ts)). They are not study records but the subtitle handling state of that browser, so they are not saved to the account.
 
-- `NF_studied_videos`: Metadata for studied videos (ID, title, cover image, total pages, update time, and so on)
-- `NF_checklist_{videoId}`: Five-step checklist for each round and page of a video
-- `NF_itemsPerPage_{videoId}`: Lines per page for a video
-- `NF_isEnglishVisible`, `NF_isKoreanVisible`: Subtitle visibility
-- `NF_isAutoPause`, `NF_isPageEndPause`, `NF_isAutoSkip`, `NF_isSmartSkim`, `NF_isSentenceLoop`: Playback settings
-- `NF_isPanelVisible`, `NF_isOverlayVisible`, `NF_studyPanelWidthRatio`, `NF_fontSize`: Display settings
-- `NF_lingoActive`, `NF_preferredTextLocale`: Values used for subtitle handling
-- `NF_annotations_{videoId}`: Old highlights and notes. After they are moved to the extension's storage, these keys are neither read nor written, but they are left in place as the original copy.
+- `NF_lingoActive`, `NF_preferredTextLocale`
 
-### Moving old notes
+### Communication between the Netflix page, extension pages, and the service worker
 
-When a Netflix page opens, `ensureLegacyMigration` in [storeClient.ts](src/pages/Content/utils/storeClient.ts) collects every `NF_annotations_*` value and sends it on, and [legacyMigration.ts](src/shared/storage/legacyMigration.ts) copies the notes into the extension's storage.
+The study script injected into the Netflix page cannot use `chrome.*` APIs, so it sends requests to the content script ([storeBridge.ts](src/pages/ContentLoader/storeBridge.ts)) with `window.postMessage`. The content script uses [protocol.ts](src/shared/bridge/protocol.ts) to check that each message comes from the same window and origin and is a known operation, then passes it to the service worker over a port (`nf-study-netflix`) opened with `chrome.runtime.connect`. Firebase does not run in the content script. The service worker ([server.ts](src/pages/Background/server.ts)) checks that the port comes from this extension on the Netflix page (`https://www.netflix.com`), and [handler.ts](src/shared/bridge/handler.ts) handles only Netflix note and Netflix study record operations. The Netflix side gets back only whether the user is signed in and error codes. The dashboard's book reader and memo collection links also go through this channel, and the service worker opens the tab.
 
-- If the video is in `NF_studied_videos`, its title, season, and episode are added to the note.
-- The originals are never deleted or changed.
-- A note whose id already exists is not overwritten, so running it again creates no duplicates. A video that was already moved is not moved again, so notes you deleted afterward do not come back.
-- Each video is handled separately, so one broken JSON value does not block the others. If any video fails, the completion marker is not set and the move is retried the next time a Netflix page opens.
-
-### Communication between the Netflix page and storage
-
-The study script injected into the Netflix page cannot use `chrome.*` APIs, so it sends requests to the content script ([storeBridge.ts](src/pages/ContentLoader/storeBridge.ts)) with `window.postMessage`. The content script uses [protocol.ts](src/shared/bridge/protocol.ts) and [handler.ts](src/shared/bridge/handler.ts) to check that each message comes from the same window and origin, is a known operation, and touches only Netflix notes, then reads or writes storage. The dashboard's book reader and memo collection links also go through this channel, and the service worker ([index.ts](src/pages/Background/index.ts)) opens the tab.
+The book reader and the memo collection open a port (`nf-study-ext`) with [extClient.ts](src/shared/rpc/extClient.ts) to use the whole store and to sign in, sign out, delete the account, and get usage. The message format is in [protocol.ts](src/shared/rpc/protocol.ts). The service worker stops when idle, so ports send a signal every 20 seconds, reconnect when cut off, resend pending requests, and reread changes missed in between ([portClient.ts](src/shared/rpc/portClient.ts)). Changes made on other pages or computers reach the service worker through its Firestore subscription, and it tells the open ports what changed.
 
 ## Key files
 
@@ -123,7 +226,12 @@ The study script injected into the Netflix page cannot use `chrome.*` APIs, so i
 - Highlights and notes (Netflix): [SentenceList.tsx](src/pages/Content/components/SentenceList.tsx), [useAnnotations.ts](src/pages/Content/hooks/useAnnotations.ts), [annotationHelper.ts](src/pages/Content/utils/annotationHelper.ts)
 - Shared highlight and note UI: [annotationUi.tsx](src/shared/ui/annotationUi.tsx), [AnnotationEditor.tsx](src/shared/ui/AnnotationEditor.tsx), [annotations.css](src/shared/ui/annotations.css)
 - Memo model and shared storage: [src/shared/memo/](src/shared/memo/), [src/shared/storage/](src/shared/storage/)
-- Communication between the Netflix page and storage: [src/shared/bridge/](src/shared/bridge/), [storeBridge.ts](src/pages/ContentLoader/storeBridge.ts), [storeClient.ts](src/pages/Content/utils/storeClient.ts)
+- Firestore document layout and security rules: [firestoreLayout.ts](src/shared/storage/firestoreLayout.ts), [firestoreArea.ts](src/shared/storage/firestoreArea.ts), [firestore.rules](firestore.rules)
+- Service worker (sign-in, Firebase, account deletion, old data cleanup): [src/pages/Background/](src/pages/Background/), [config.ts](src/shared/firebase/config.ts)
+- Ports between extension pages or the content script and the service worker: [src/shared/rpc/](src/shared/rpc/)
+- Communication between the Netflix page and the service worker: [src/shared/bridge/](src/shared/bridge/), [storeBridge.ts](src/pages/ContentLoader/storeBridge.ts), [storeClient.ts](src/pages/Content/utils/storeClient.ts), [studyStore.ts](src/pages/Content/utils/studyStore.ts)
+- Sign-in and account UI: [src/pages/Reader/account/](src/pages/Reader/account/), Netflix sign-in notice [StudyNotices.tsx](src/pages/Content/components/StudyNotices.tsx)
+- Privacy policy and copyright notice pages: [site/](site/)
 - Text cleanup and chapter splitting: [bookText.ts](src/shared/text/bookText.ts)
 - Book reader, memo collection, backup: [src/pages/Reader/](src/pages/Reader/)
 - Study progress: [progress.ts](src/pages/Reader/logic/progress.ts), [ProgressBar.tsx](src/pages/Reader/components/ProgressBar.tsx)

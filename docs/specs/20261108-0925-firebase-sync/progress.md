@@ -44,7 +44,7 @@
 | 4.8-1 백업 내보내기 | 만족 | 통합 `backup.emulator.test.ts` 4.8-1, 단위 `backup.test.ts` 형식 2 |
 | 4.8-2 백업 가져오기 | 만족 | 통합 `backup.emulator.test.ts` 4.8-2(버전 1 파일, 새 쪽 남김, 상한 초과 시 하나도 안 씀), 단위 `backup.test.ts` |
 | 4.8-3 공개 페이지 | 만족 | Hosting 배포(배포 폴더 `site/`: `index.html`, `privacy/index.html`, `copyright/index.html` 3개뿐). `curl` 두 페이지 200, 연락처·서울 지역·uid·IP·보관 기간·탈퇴·백업·시행일·신고 처리 문구 확인 |
-| 4.8-4 방침 링크 | 진행 | 단위 `AuthGate.test.tsx` 4.8-4(로그인 화면), 4.6-1(탈퇴 확인). README 남음 |
+| 4.8-4 방침 링크 | 만족 | 단위 `AuthGate.test.tsx` 4.8-4(로그인 화면), 4.6-1(탈퇴 확인). README.md·README.en.md "로그인과 데이터" 절에 두 링크 |
 | 4.8-5 OAuth 브랜딩 | 만족(로그인은 사용자 확인) | 2026-11-09 Claude in Chrome(hunt24333)으로 Google Auth Platform 브랜딩에 홈페이지 `https://nf-subtitle-study-21cae.web.app/`, 개인정보처리방침 `.../privacy/`, 승인된 도메인 `nf-subtitle-study-21cae.web.app`을 넣고 저장(저장하려면 필수인 개발자 연락처에 `hunt24333@gmail.com`도 넣음). 다시 열어 값이 남은 것 확인. Audience의 게시 상태 "In production", 사용자 유형 External. 브랜드 검증 상태: "Your branding needs to be verified before it can be shown to users."(검증은 신청 안 함, 2장 결정). 잘라 낸 스크린샷 [oauth-branding.png](oauth-branding.png) |
 | 4.9-1 화면(design-check) | 사용자 확인 | 구현 중 자기 점검: `shoot.mjs`로 1280·1024의 로그인 전(실제 빌드), 로그인됨, 사용량 가득, 탈퇴 확인, 설정 없음을 찍어 봄(axe 위반 없음, `screens/`). `design-check`는 구현 뒤 다음 단계로 권한다 |
 | 4.10-1 권한 | 만족 | `manifest.json`에 identity, `check-build.test.ts`(권한을 하나 더한 manifest면 실패), `npm run check:build` ok |
@@ -55,7 +55,7 @@
 | 4.11-1 에뮬레이터 테스트 한 명령 | 만족 | `npm run test:emulator` 38개 통과. `rules.emulator.test.ts`가 프로젝트 id가 demo-로 시작하는지 검사 |
 | 4.11-2 CI | 진행 | `.github/workflows/ci.yml`에 `actions/setup-java`(temurin 21)와 `npm run test:emulator`. E2E는 CI에 없음. 9a65011 CI 성공(run 42573284762) |
 | 4.11-3 개발 화면·표시 검사 | 만족 | `reader-dev.html`은 메모리 저장소와 가짜 로그인(`fakeAuth.ts`), 넷플릭스 패널 개발 화면 `netflix-dev.html`(`?auth=out\|wait`, `?error=`). `check:build`의 개발 표시에 `NF_STUDY_DEV_FAKE_AUTH`, `NF_STUDY_E2E_EMULATOR_LOGIN`, 에뮬레이터 연결 문구를 더하고 그 표시를 넣은 번들로 실패하는 테스트(`check-build.test.ts` 4.11-3). 일반 빌드 ok |
-| 4.12-1 README·DEVELOPMENT | 대기 | |
+| 4.12-1 README·DEVELOPMENT | 만족 | README·DEVELOPMENT 두 언어에 로그인, Firestore 구조, 20MB·무료 한도, 탈퇴, 옛 로컬 데이터 지우기와 업데이트 전 백업 안내, 방침 링크, `identity` 권한, 설정 파일(`apps:sdkconfig ... --out firebase.config.local.json`, 자기 Firebase 프로젝트로 빌드하기 8단계), 에뮬레이터·E2E 테스트(Java 21 PATH), 배포. 두 언어 대조: 절 구성과 줄 수가 같고(README 226줄, DEVELOPMENT 246줄씩) 절마다 문장을 맞춰 봄(서브에이전트 대조 뒤 메인이 로그인 절을 읽어 확인) |
 | 4.12-2 design.md | 만족 | `docs/design.md` 5장 "계정과 저장 안내"에 로그인 화면, 대기 표시, 계정 표시, 확인 대화상자, 저장 오류 안내, 넷플릭스 패널의 안내를 더함. `design-check`가 이 기준으로 본다 |
 | 완료: 전체 검사 통과 | 대기 | |
 | 완료: 마지막 커밋 CI 성공 | 대기 | |
@@ -89,6 +89,8 @@
 없음.
 
 ## 놓친 점
+
+- [프로세스] DEVELOPMENT 문서에 `check:build`가 찾는 문자열(`client_secret`)을 설명으로 적으니 비밀 값 검사가 실패했다. 검사 예외는 `docs/`뿐이라 문구를 바꿨다.
 
 - [명세서] 4.8-5: 브랜딩 저장에 "개발자 연락처 이메일"이 필수였다. 명세서에 없어 프로젝트 소유 계정 `hunt24333@gmail.com`을 넣었다(Google에만 보이는 값).
 - [프로세스] Claude in Chrome에서 좌표 클릭 뒤 입력이 입력칸 밖으로 가 콘솔 단축키가 눌려 다른 화면으로 넘어갔다(저장 전이라 바뀐 것 없음). 요소 참조(ref)로 다시 했다.
