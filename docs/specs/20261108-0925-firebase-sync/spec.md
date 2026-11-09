@@ -91,7 +91,8 @@
   - 뺀 안: 그대로 두기(추천했던 안).
 - **개인정보처리방침과 저작권 안내는 이 저장소의 GitHub Pages(`mivomad33.github.io` 아래)에 둔다**(추천안·사용자 승인, 2026-11-08). 0원이고, 구글 로그인 공개 설정에 이 주소를 등록한다. 뺀 안: 확장 프로그램 안 페이지만(구글 로그인 공개에 필요한 웹 주소가 없다).
 - **저작권 신고와 개인정보 문의는 이메일 `mivomad33@gmail.com`으로 받는다**(사용자 결정, 2026-11-08). 개인정보처리방침과 저작권 안내에 이 주소를 공개한다. 뺀 안: GitHub 이슈(추천했던 안. 신고 내용이 공개된다).
-- **Firebase 프로젝트와 Google Cloud OAuth의 소유 계정은 `mivomad33@gmail.com`이다**(사용자 결정, 2026-11-08). 저장소·연락처·GitHub Pages 주소와 같은 계정으로 묶는다.
+- **Firebase 프로젝트와 Google Cloud OAuth의 소유 계정은 `hunt24333@gmail.com`이다**(사용자 결정, 2026-11-09). 처음에는 저장소·연락처와 같은 `mivomad33@gmail.com`으로 정했으나, 그 계정은 Firebase 콘솔이 요구하는 2단계 인증을 켤 수 없어 바꿨다. 저장소, 연락처 이메일, GitHub Pages 주소는 `mivomad33`으로 그대로 둔다.
+- **Google 로그인 화면의 지원 이메일은 `hunt24333@gmail.com`이다**(사용자 결정, 2026-11-09). 프로젝트 소유자 주소만 고를 수 있어서다. 이 주소는 로그인하는 사용자에게 보인다. 뺀 안: `mivomad33`를 프로젝트 멤버로 초대(초대 수락도 2단계 인증에 막힐 수 있다).
 - **Firestore 지역은 서울(`asia-northeast3`)이다**(추천안·사용자 승인, 2026-11-08). 한 번 정하면 바꿀 수 없다. 이유: 한국에서 가장 빠르다. 뺀 안: 미국 여러 지역(`nam5`).
 - **넷플릭스 자막 처리에 쓰는 값(`NF_lingoActive`, `NF_preferredTextLocale`)은 넷플릭스 `localStorage`에 그대로 둔다**(AI 판단, 2026-11-08). 학습 기록이 아니라 그 브라우저의 자막 처리 상태라서다. 나머지 이 확장 프로그램의 `NF_` 키(설정, 체크리스트, 공부한 영상 목록, 페이지당 대사 수, 예전 메모)는 앞으로 Firestore에 쓰고, 로컬에 남은 옛 값은 옮기지 않고 지운다.
 - 사용 통계는 모으지 않는다. Firebase Analytics 등 분석 도구를 붙이지 않는다(AI 판단, 2026-11-08. 개인정보처리방침을 작게 유지한다).
@@ -136,7 +137,7 @@
 용어
 
 - **사용자**: Google 계정으로 로그인한 사람. Firebase 사용자 id(uid)로 구별한다.
-- **운영자**: Firebase 프로젝트 소유자(`mivomad33@gmail.com`). 관리자 화면은 없고 Firebase 콘솔을 쓴다.
+- **운영자**: Firebase 프로젝트 소유자(`hunt24333@gmail.com`). 관리자 화면은 없고 Firebase 콘솔을 쓴다.
 - **확장 프로그램 화면**: 원서 리더, 메모 모아 보기, 팝업 등 `chrome-extension://` 주소의 화면.
 - **넷플릭스 화면**: 넷플릭스 페이지에 넣은 학습 패널과 대시보드.
 - **운영 프로젝트**: 6장에서 만든 실제 Firebase 프로젝트. **에뮬레이터**: Firebase Local Emulator Suite(실제 프로젝트 없이 `demo-`로 시작하는 프로젝트 id로 돈다).
@@ -283,18 +284,22 @@
 
 ### 준비 결과
 
-확정 필요: 준비를 마친 뒤 적는다. 2026-11-08 기준 진행 상황:
+2026-11-09에 모두 끝냈다. 소유 계정은 `hunt24333@gmail.com`이다(2장 결정).
 
-- 사용자가 승인한 준비 목록(2026-11-08, 모두 승인): (1) Java 21 설치 (2) Firebase CLI를 `mivomad33@gmail.com`으로 로그인 (3) Firebase 프로젝트 만들기(약관 동의, Spark, Analytics 끔) (4) Firestore 만들기(서울, 기본 거부 규칙) (5) 웹 앱 등록 (6) Authentication의 Google 로그인 켜기, 승인된 도메인에 확장 프로그램 ID 더하기 (7) OAuth 동의 화면(외부, 테스트 상태, 지원 이메일 mivomad33)과 웹 OAuth 클라이언트에 `https://flhkacfjjpipfoicbnmednajnhebihmb.chromiumapp.org/` 리디렉션 주소 더하기.
-- 끝난 것:
-  - Java 21: `brew install openjdk@21`. keg-only라 PATH에 없다. 에뮬레이터를 돌릴 때 `/opt/homebrew/opt/openjdk@21/bin`을 PATH 앞에 둔다.
-  - Firebase CLI 로그인: `mivomad33@gmail.com`(firebase-tools 15.35.0, 2026-11-08).
-  - Google Cloud 프로젝트 `nf-subtitle-study`(번호 802056977061)를 `mivomad33@gmail.com`으로 만들었다. 다시 만들지 않는다.
-- 막힌 것: 이 프로젝트에 Firebase를 붙이는 요청(`addFirebase`)이 403으로 거부됐다. Firebase 콘솔은 `mivomad33@gmail.com`에 2단계 인증을 요구하는데, Google이 본인 확인을 할 수 없다며 2단계 인증 켜기를 막는다. 사용자는 hunt24333 계정으로 바꾸지 않고 기다리기로 했다(사용자 결정, 2026-11-08). 2026-11-15에 다시 확인한다.
+- 승인된 준비 목록(2026-11-08 승인, 2026-11-09 계정만 바꿔 다시 승인): (1) Java 21 설치 (2) Firebase CLI 로그인 (3) Firebase 프로젝트 만들기(약관 동의, Spark, Analytics 끔) (4) Firestore 만들기(서울, 기본 거부 규칙) (5) 웹 앱 등록 (6) Authentication의 Google 로그인 켜기, 승인된 도메인에 확장 프로그램 더하기 (7) OAuth 동의 화면과 웹 OAuth 클라이언트에 리디렉션 주소 더하기.
+- Java 21: `brew install openjdk@21`. keg-only라 PATH에 없다. 에뮬레이터를 돌릴 때 `/opt/homebrew/opt/openjdk@21/bin`을 PATH 앞에 둔다.
+- Firebase CLI: 전역 설치는 없다. `npx firebase-tools@15.35.0`로 썼다(구현 때 개발용 패키지로 설치한다). 기본 계정은 `hunt24333@gmail.com`이다(`login:use`). `mivomad33@gmail.com`도 로그인되어 남아 있으니 명령에 `--account`를 붙이거나 기본 계정을 확인한다.
+- Firebase 프로젝트: 표시 이름 `nf-subtitle-study`, **프로젝트 id `nf-subtitle-study-21cae`**, 번호 777101314338. Spark 요금제. Google Analytics, Gemini in Firebase, Google Developer Program 가입은 껐다.
+- Firestore: `(default)` 데이터베이스, Standard edition, 위치 `asia-northeast3`(서울), Production mode(모두 거부 규칙). 예약 백업은 Blaze가 필요해 끄고 넘어갔다.
+- 웹 앱: 이름 `netflix-subtitle-study-extension`, 앱 id `1:777101314338:web:f8782f201bed5f99347d7b`. 설정값은 `npx firebase-tools apps:sdkconfig WEB 1:777101314338:web:f8782f201bed5f99347d7b --project nf-subtitle-study-21cae`로 얻는다. 이 값은 비밀이 아니지만 커밋 훅이 API 키 모양의 값을 막으므로, 구현에서 빌드 때 넣는 방법(예: 커밋하지 않는 설정 파일이나 환경 변수, CI에는 저장소 변수)을 정한다.
+- Authentication: Google 로그인을 켰다. 공개 이름 `Netflix Subtitle Study`, 지원 이메일 `hunt24333@gmail.com`. 승인된 도메인에 `chrome-extension://flhkacfjjpipfoicbnmednajnhebihmb`를 더했다(기본 `localhost`, `nf-subtitle-study-21cae.firebaseapp.com`, `nf-subtitle-study-21cae.web.app`도 있다).
+- OAuth: Firebase가 동의 화면(외부 사용자)과 웹 클라이언트를 자동으로 만들었다. 웹 클라이언트 id는 `777101314338-gs9g574npcnmjhpp65d2vrsb0fq3oabp.apps.googleusercontent.com`이다. 승인된 리디렉션 주소에 `https://flhkacfjjpipfoicbnmednajnhebihmb.chromiumapp.org/`를 더했다. 클라이언트 비밀은 쓰지 않는다.
+- 동의 화면의 게시 상태는 자동으로 만들어질 때부터 **프로덕션**이다. 승인 목록의 "테스트 상태"와 다르지만 4.8-5의 최종 상태와 같아 그대로 뒀다. 기본 권한(openid, email, profile)만 쓰니 검증이 필요 없다. 4.8-5에서는 홈페이지·개인정보처리방침 주소와 승인된 도메인만 더 넣으면 된다.
+- 쓰지 않는 것: `mivomad33@gmail.com`이 만든 Google Cloud 프로젝트 `nf-subtitle-study`(번호 802056977061)는 Firebase를 붙이지 못한 빈 프로젝트다. 이 명세서에서는 쓰지 않는다.
 
 ### 사용자가 할 일
 
-확정 필요: 준비를 마친 뒤 적는다. 지금은 `mivomad33@gmail.com`의 2단계 인증 켜기(계정 보안 설정이라 AI가 할 수 없다). 비밀번호는 바꾸지 않는다(최근 보안 변경으로 잡혀 대기가 길어질 수 있다).
+없음.
 
 ### 구현 전에 끝낸 작업
 
