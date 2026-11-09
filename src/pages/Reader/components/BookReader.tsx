@@ -31,6 +31,7 @@ import { ReadAloudBar, ReadAloudSettings, readAloudSettings, useReadAloud } from
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
 import { isBookMemoAnchored, memosForParagraph } from '../logic/bookMemos';
+import { applyMemoChanges } from '../logic/liveMemos';
 
 const MIN_FONT = 10;
 const MAX_FONT = 28;
@@ -208,6 +209,19 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
       if (Object.keys(updates).length > 0) setDone((prev) => ({ ...prev, ...updates }));
     });
   }, [area, bookId]);
+
+  // 다른 탭·기기에서 바꾼 이 책의 메모를 반영한다(4.2-3). 고치는 중인 메모는 그대로 둔다.
+  const editingRef = useRef<string | null>(null);
+  editingRef.current = editingId;
+  useEffect(
+    () =>
+      area.onChanged((changes) => {
+        setMemos((prev) =>
+          applyMemoChanges(prev, changes, (m) => m.kind === 'book' && m.sourceId === bookId, editingRef.current)
+        );
+      }),
+    [area, bookId]
+  );
 
   const toggleDone = (id: string, from: 'list' | 'end') => {
     const next = !done[id];

@@ -1,19 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './StudyDashboardModal.css';
-import { STORAGE_KEYS } from './constants/storageKeys';
 import { migrateChecklists } from './utils/checklistMigrator';
 import { getStoreClient } from './utils/storeClient';
 import { ExtensionPage } from '../../shared/bridge/protocol';
+import { StudiedVideoRecord } from '../../shared/bridge/netflixRecords';
+import { PageChecklist } from '../../types';
+import { reportStorageError, storeRead, storeWrite, useStoreEvent, useStudyAuth } from './utils/studyStore';
+import { LoginNotice, StorageErrorNotice, WaitingNotice } from './components/StudyNotices';
 
-interface StudiedVideo {
-  videoId: string;
-  title: string;
-  cover: string;
-  epTitle: string;
-  epSeq: number;
-  seasonSeq: number;
-  totalPages: number;
-  updatedAt: number;
+interface StudiedVideo extends StudiedVideoRecord {
   completedPages: number;
   currentActiveRound: number;
 }
@@ -22,52 +17,56 @@ interface StudyDashboardModalProps {
   onClose: () => void;
 }
 
+const isPageDone = (page: PageChecklist | undefined) =>
+  !!page && page.preStudy && page.noSubtitles && page.scriptAnalysis && page.shadowing && page.speaking;
+
+// 공부한 영상 하나의 진행 정도. 그 영상의 체크리스트를 따로 읽는다.
+async function withProgress(video: StudiedVideoRecord): Promise<StudiedVideo> {
+  const stored = await storeRead<unknown>({ op: 'checklist.get', videoId: video.videoId });
+  const checklists = migrateChecklists(stored ?? null);
+  const activeRound = checklists.currentActiveRound;
+  const activeRoundData = checklists.rounds[activeRound] || {};
+  let completedPages = 0;
+  for (let i = 0; i < video.totalPages; i++) {
+    if (isPageDone(activeRoundData[i])) completedPages++;
+  }
+  return { ...video, completedPages, currentActiveRound: activeRound };
+}
+
 const StudyDashboardModal: React.FC<StudyDashboardModalProps> = ({ onClose }) => {
-  const [videos, setVideos] = useState<StudiedVideo[]>([]);
+  const auth = useStudyAuth();
+  const [videos, setVideos] = useState<StudiedVideo[] | null>(null);
+  const loadSeq = useRef(0);
+
+  // 로그인했을 때만 공부한 영상 목록과 영상마다 체크리스트를 읽는다(4.1-2).
+  const load = useCallback(() => {
+    const seq = ++loadSeq.current;
+    storeRead<StudiedVideoRecord[]>({ op: 'studied.list' })
+      .then((list) => Promise.all(list.map(withProgress)))
+      .then((list) => {
+        if (seq !== loadSeq.current) return;
+        // 최신 학습 순으로 정렬
+        list.sort((a, b) => b.updatedAt - a.updatedAt);
+        setVideos(list);
+      })
+      .catch((e) => {
+        if (seq !== loadSeq.current) return;
+        setVideos((prev) => prev ?? []);
+        reportStorageError(e, load);
+      });
+  }, []);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.STUDIED_VIDEOS);
-      const studiedVideos = saved ? JSON.parse(saved) : {};
+    setVideos(null);
+    if (auth === 'in') load();
+    else loadSeq.current++;
+  }, [auth, load]);
 
-      const list = Object.values(studiedVideos).map((video: any) => {
-        // 개별 체크리스트 완료 수 파싱
-        const checklistSaved = localStorage.getItem(`${STORAGE_KEYS.CHECKLIST_PREFIX}${video.videoId}`);
-        const parsedChecklists = checklistSaved ? JSON.parse(checklistSaved) : null;
-        const checklists = migrateChecklists(parsedChecklists);
-
-        const activeRound = checklists.currentActiveRound;
-        const activeRoundData = checklists.rounds[activeRound] || {};
-
-        let completedPagesCount = 0;
-        for (let i = 0; i < video.totalPages; i++) {
-          const pageData = activeRoundData[i];
-          if (
-            pageData &&
-            pageData.preStudy &&
-            pageData.noSubtitles &&
-            pageData.scriptAnalysis &&
-            pageData.shadowing &&
-            pageData.speaking
-          ) {
-            completedPagesCount++;
-          }
-        }
-
-        return {
-          ...video,
-          completedPages: completedPagesCount,
-          currentActiveRound: activeRound,
-        } as StudiedVideo;
-      });
-
-      // 최신 학습 순으로 정렬
-      list.sort((a, b) => b.updatedAt - a.updatedAt);
-      setVideos(list);
-    } catch (e) {
-      console.error('Failed to load studied videos:', e);
-    }
-  }, []);
+  // 다른 곳에서 공부한 영상이나 체크리스트가 바뀌면 다시 읽는다(4.2-3).
+  useStoreEvent((event) => {
+    if (auth !== 'in' || event.event !== 'changed') return;
+    if (event.scope === 'studied' || event.scope === 'checklist' || event.scope === 'all') load();
+  });
 
   // 확장 프로그램 화면은 넷플릭스 페이지에서 바로 열 수 없어 content script에 부탁한다.
   const openExtensionPage = (page: ExtensionPage) => {
@@ -88,22 +87,16 @@ const StudyDashboardModal: React.FC<StudyDashboardModalProps> = ({ onClose }) =>
       return;
     }
 
-    try {
-      // 1. 레지스트리에서 삭제
-      const saved = localStorage.getItem(STORAGE_KEYS.STUDIED_VIDEOS);
-      const studiedVideos = saved ? JSON.parse(saved) : {};
-      delete studiedVideos[videoId];
-      localStorage.setItem(STORAGE_KEYS.STUDIED_VIDEOS, JSON.stringify(studiedVideos));
-
-      // 2. 체크리스트 삭제
-      localStorage.removeItem(`${STORAGE_KEYS.CHECKLIST_PREFIX}${videoId}`);
-
-      // 3. 상태 갱신
-      setVideos((prev) => prev.filter((video) => video.videoId !== videoId));
-    } catch (e) {
-      console.error('Failed to delete studied video:', e);
-      alert('학습 기록 삭제 중 오류가 발생했습니다.');
-    }
+    // 화면에서 먼저 지우고, 공부한 영상 기록과 그 영상의 체크리스트를 지운다. 메모는 남긴다.
+    setVideos((prev) => (prev ?? []).filter((video) => video.videoId !== videoId));
+    const removeVideo = () => {
+      storeWrite({ op: 'studied.delete', videoId }, removeVideo);
+    };
+    const removeChecklist = () => {
+      storeWrite({ op: 'checklist.delete', videoId }, removeChecklist);
+    };
+    removeVideo();
+    removeChecklist();
   };
 
   return (
@@ -122,7 +115,13 @@ const StudyDashboardModal: React.FC<StudyDashboardModalProps> = ({ onClose }) =>
           <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
 
-        {videos.length === 0 ? (
+        <div className="dashboard-notices">
+          <StorageErrorNotice tone="dark" />
+          {auth !== 'in' && <LoginNotice auth={auth} tone="dark" />}
+          {auth === 'in' && videos === null && <WaitingNotice text="학습 기록을 불러오는 중…" tone="dark" />}
+        </div>
+
+        {auth !== 'in' || videos === null ? null : videos.length === 0 ? (
           <div className="empty-dashboard">
             <p>아직 학습 중인 영상이 없습니다.</p>
             <p className="sub-text">넷플릭스 영상을 재생하고 학습 창(StudyPanel)에서 체크리스트 단계를 채우면 자동으로 대시보드에 기록됩니다!</p>

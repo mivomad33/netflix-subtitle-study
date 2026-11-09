@@ -1,6 +1,23 @@
 import React, { useRef, useState } from 'react';
+import { StorageArea } from '../../../shared/storage/storageArea';
+import { toStorageErrorCode } from '../../../shared/storage/errors';
+import { storageErrorMessage } from '../../../shared/ui/storageErrors';
 import { useReaderEnv } from '../env';
 import { exportBackup, mergeBackup, parseBackup } from '../logic/backup';
+
+// 백업 파일을 만들어 내려받게 한다. 탈퇴 확인 단계에서도 쓴다.
+export async function downloadBackup(area: StorageArea) {
+  const { filename, json, counts } = await exportBackup(area);
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { filename, counts };
+}
 
 // 공통 저장소 전체를 JSON 파일 하나로 내보내고, 내보낸 파일을 지금 데이터와 합친다.
 export const BackupControls: React.FC<{ onImported: () => void }> = ({ onImported }) => {
@@ -12,19 +29,10 @@ export const BackupControls: React.FC<{ onImported: () => void }> = ({ onImporte
   const handleExport = async () => {
     setMessage(null);
     try {
-      const { filename, json, counts } = await exportBackup(area);
-      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const { filename, counts } = await downloadBackup(area);
       setMessage({ kind: 'info', text: `책 ${counts.books}권, 메모 ${counts.memos}개를 ${filename}로 내보냈습니다.` });
     } catch (e) {
-      console.error('[NF-STUDY] Backup export failed:', e);
-      setMessage({ kind: 'error', text: '내보내지 못했습니다. 다시 시도해 주세요.' });
+      setMessage({ kind: 'error', text: `내보내지 못했습니다. ${storageErrorMessage(toStorageErrorCode(e))}` });
     }
   };
 
@@ -45,8 +53,14 @@ export const BackupControls: React.FC<{ onImported: () => void }> = ({ onImporte
       setMessage({ kind: 'info', text: `책 ${books}권, 메모 ${memos}개를 합쳤습니다.` });
       onImported();
     } catch (e) {
-      console.error('[NF-STUDY] Backup import failed:', e);
-      setMessage({ kind: 'error', text: '저장하지 못했습니다. 데이터는 바뀌지 않았습니다.' });
+      const code = toStorageErrorCode(e);
+      setMessage({
+        kind: 'error',
+        text:
+          code === 'quota-exceeded'
+            ? '합치면 저장 공간 20MB를 넘어 가져오지 않았습니다. 데이터는 바뀌지 않았습니다.'
+            : `저장하지 못했습니다. ${storageErrorMessage(code)}`,
+      });
     } finally {
       setBusy(false);
     }

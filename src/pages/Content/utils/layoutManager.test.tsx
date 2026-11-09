@@ -5,12 +5,21 @@ import {
   getIsPanelVisible, 
   getIsOverlayVisible, 
   togglePanelVisibility, 
-  toggleOverlayVisibility 
+  toggleOverlayVisibility,
+  resetRenderedVideoId,
 } from './layoutManager';
+import { installFakeStore } from '../testing/fakeStore';
+import { setStoreClient } from './storeClient';
+import { createMemoryArea } from '../../../shared/storage/storageArea';
+import { createDirectClient } from '../../../shared/bridge/directClient';
+import { BridgeCall } from '../../../shared/bridge/protocol';
 
 describe('layoutManager UI Controller', () => {
+  let store: ReturnType<typeof installFakeStore>;
+
   beforeEach(() => {
     localStorage.clear();
+    store = installFakeStore();
     document.body.innerHTML = '';
     
     // setupUI가 동작하기 위한 모의 appMountPoint 생성 및 추가
@@ -52,11 +61,13 @@ describe('layoutManager UI Controller', () => {
 
   afterEach(() => {
     cleanupUI();
+    resetRenderedVideoId();
+    setStoreClient(null);
     delete (window as any).netflix;
     vi.restoreAllMocks();
   });
 
-  it('toggles visibility and saves new state to localStorage', () => {
+  it('toggles visibility and saves new state to the store', async () => {
     // 초기 디폴트: Panel = true, Overlay = false
     expect(getIsPanelVisible()).toBe(true);
     expect(getIsOverlayVisible()).toBe(false);
@@ -66,6 +77,37 @@ describe('layoutManager UI Controller', () => {
 
     toggleOverlayVisibility();
     expect(getIsOverlayVisible()).toBe(true); // 토글되어 true
+
+    await vi.waitFor(async () =>
+      expect((await store.area!.get(['nf:settings']))['nf:settings']).toMatchObject({
+        isPanelVisible: false,
+        isOverlayVisible: true,
+      })
+    );
+  });
+
+  it('starts with the default layout and applies the stored width and visibility once they arrive', async () => {
+    let release: (() => void) | undefined;
+    const area = createMemoryArea({ 'nf:settings': { studyPanelWidthRatio: 0.3, isOverlayVisible: true } });
+    const direct = createDirectClient(area);
+    // 저장된 설정을 늦게 돌려주는 저장소
+    setStoreClient({
+      async call<T>(c: BridgeCall): Promise<T> {
+        if (c.op === 'nfSettings.get') await new Promise<void>((r) => (release = r));
+        return direct.call<T>(c);
+      },
+    });
+
+    setupUI([], '12345');
+    const appMountPoint = document.getElementById('appMountPoint')!;
+    expect(appMountPoint.style.width).toBe('40%');
+    expect(getIsOverlayVisible()).toBe(false);
+
+    await vi.waitFor(() => expect(release).toBeDefined());
+    release!();
+    await vi.waitFor(() => expect(appMountPoint.style.width).toBe('30%'));
+    expect(document.getElementById('studyPanel')!.style.width).toBe('70%');
+    expect(getIsOverlayVisible()).toBe(true);
   });
 
   it('injects divider and studyPanel DOM elements when calling setupUI', () => {

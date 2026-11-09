@@ -25,3 +25,19 @@ secrets.*.js
 
 # tools
 /.serena/
+
+# Firebase web config (not committed, see DEVELOPMENT.md)
+firebase.config.local.json
+
+# Firebase CLI and emulator logs
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
+.firebase/
+
+# E2E build and results
+/build-e2e
+/test-results

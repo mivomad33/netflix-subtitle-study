@@ -18,8 +18,14 @@ import {
   injectBottomToggleButton,
 } from './utils/domInjector';
 import StudyDashboardModal from './StudyDashboardModal';
+import { removeLegacyStudyKeys } from './utils/legacyCleanup';
+import { startStudyStore } from './utils/studyStore';
 
 console.log('[NF-STUDY] Content Script (index.tsx) injected & initialized.');
+
+// 옛 학습 기록 키를 지우고(4.7-2), 로그인 상태와 설정을 읽기 시작한다.
+removeLegacyStudyKeys();
+startStudyStore();
 
 // 네트워크 인터셉터 실행
 initNetworkInterceptor(

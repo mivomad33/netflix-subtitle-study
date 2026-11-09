@@ -1,7 +1,8 @@
 // Dashboard helper for netflix-subtitle-study
 
 import { VideoMetadata } from '../../../types';
-import { STORAGE_KEYS } from '../constants/storageKeys';
+import { StudiedVideoRecord } from '../../../shared/bridge/netflixRecords';
+import { storeWrite } from './studyStore';
 
 export interface VideoInfo {
   title: string;
@@ -36,7 +37,9 @@ export const getVideoInfo = (videoId: string | number): VideoInfo | null => {
   }
 };
 
-export const registerVideoMetadata = (videoId: string | number, totalTabs: number) => {
+// 공부한 영상 목록(대시보드)에 이 영상을 남긴다. 영상마다 기록 하나라서 그 영상의 것만 쓴다.
+// 로그인하지 않았으면 아무것도 쓰지 않는다. 저장 실패는 저장 오류 안내로 보인다.
+export const registerVideoMetadata = async (videoId: string | number, totalTabs: number): Promise<void> => {
   console.log('[NF-STUDY] registerVideoMetadata called. videoId:', videoId);
   try {
     if (!window.netflix?.appContext?.state?.playerApp) {
@@ -89,25 +92,19 @@ export const registerVideoMetadata = (videoId: string | number, totalTabs: numbe
     const epSeq = currentEpisode ? currentEpisode.seq : 1;
     const seasonSeq = currentSeason ? currentSeason.seq : 1;
 
-    const saved = localStorage.getItem(STORAGE_KEYS.STUDIED_VIDEOS);
-    const studiedVideos = saved ? JSON.parse(saved) : {};
-
-    studiedVideos[videoId] = {
+    // 저장소의 길이 상한(netflixRecords)을 넘지 않게 자른다.
+    const record: StudiedVideoRecord = {
       videoId: videoId.toString(),
-      title,
-      cover,
-      epTitle,
-      epSeq,
-      seasonSeq,
+      title: title.slice(0, 500),
+      cover: cover.length <= 2000 ? cover : '',
+      epTitle: (epTitle || '').slice(0, 500),
+      epSeq: Number(epSeq) || 1,
+      seasonSeq: Number(seasonSeq) || 1,
       totalPages: totalTabs,
       updatedAt: Date.now(),
     };
-
-    localStorage.setItem(STORAGE_KEYS.STUDIED_VIDEOS, JSON.stringify(studiedVideos));
-    console.log(
-      '[NF-STUDY] Successfully updated local studied video metadata for videoId:',
-      videoId
-    );
+    const write = (): Promise<boolean> => storeWrite({ op: 'studied.put', video: record }, () => void write());
+    await write();
   } catch (e) {
     console.error(
       '[NF-STUDY] Failed to register studied video metadata. Error:',

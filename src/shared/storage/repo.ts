@@ -13,6 +13,7 @@ import {
 } from '../memo/types';
 import { KEY, PREFIX, chapterKeyPrefix, completionKeyPrefix } from './keys';
 import { StorageArea } from './storageArea';
+import { toStorageErrorCode } from './errors';
 
 const keysWithPrefix = async (area: StorageArea, prefix: string) =>
   (await area.getKeys()).filter((k) => k.startsWith(prefix));
@@ -210,7 +211,8 @@ export async function getBookCharCounts(
     if (Object.keys(items).length > 0) await area.set(items);
   } catch (e) {
     // 채우지 못해도 이번 표시는 맞다. 다음에 다시 구한다.
-    console.error('[NF-STUDY] Failed to save character counts:', e);
+    // 원래 오류 문구에는 문서 경로(uid)가 들 수 있어 종류만 남긴다.
+    console.error('[NF-STUDY] Failed to save character counts:', toStorageErrorCode(e));
   }
   return result;
 }

@@ -35,6 +35,8 @@ interface SentenceListProps {
   onRemoveAnnotation: (id: string) => void;
   onEditAnnotation: (id: string | null) => void;
   saveFailed?: boolean;
+  // 로그인해 메모를 저장할 수 있을 때만 하이라이트를 만든다(로그아웃 상태에서는 만들어도 남지 않는다).
+  canAnnotate?: boolean;
 }
 
 const formatTime = (ms: number): string => {
@@ -74,6 +76,7 @@ export const SentenceList: React.FC<SentenceListProps> = ({
   onRemoveAnnotation,
   onEditAnnotation,
   saveFailed = false,
+  canAnnotate = true,
 }) => {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -120,7 +123,7 @@ export const SentenceList: React.FC<SentenceListProps> = ({
   };
 
   return (
-    <div className="sentence-list" ref={listRef} onMouseUp={handleMouseUp}>
+    <div className="sentence-list" ref={listRef} onMouseUp={canAnnotate ? handleMouseUp : undefined}>
       {getCurrentPageSentences().map((sentence, index) => {
         const globalIndex = currentTab * itemsPerPage + index;
         const sentenceAnnotations = getAnnotationsForSentence(
@@ -179,7 +182,7 @@ export const SentenceList: React.FC<SentenceListProps> = ({
             >
               {sentence.hTranslation}
             </div>
-            {pending && pending.key === String(globalIndex) && (
+            {canAnnotate && pending && pending.key === String(globalIndex) && (
               <AnnotationToolbar
                 pending={pending}
                 onHighlight={() => createFromPending(false)}

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { STORAGE_KEYS } from '../constants/storageKeys';
 
 interface UseStudyHotkeysProps {
   player: any;
@@ -131,19 +130,11 @@ export function useStudyHotkeys({
 
       switch (event.code) {
         case 'KeyQ':
-          setIsAutoPause((prev) => {
-            const next = !prev;
-            localStorage.setItem(STORAGE_KEYS.IS_AUTO_PAUSE, next.toString());
-            return next;
-          });
+          setIsAutoPause((prev) => !prev);
           break;
         case 'KeyR':
           if (setIsSentenceLoop) {
-            setIsSentenceLoop((prev) => {
-              const next = !prev;
-              localStorage.setItem(STORAGE_KEYS.IS_SENTENCE_LOOP, next.toString());
-              return next;
-            });
+            setIsSentenceLoop((prev) => !prev);
           }
           break;
         case 'KeyT':

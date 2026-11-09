@@ -12,7 +12,7 @@ import {
 } from '../../../shared/storage/repo';
 import { StorageArea, createMemoryArea } from '../../../shared/storage/storageArea';
 import { bookMemo, netflixMemo } from '../../../shared/storage/testFixtures';
-import { handleBridgeRequest } from '../../../shared/bridge/handler';
+import { handleBridgeCall } from '../../../shared/bridge/handler';
 import { BRIDGE_REQUEST, parseBridgeRequest } from '../../../shared/bridge/protocol';
 import { ReaderEnvProvider } from '../env';
 import { BookReader } from './BookReader';
@@ -450,7 +450,7 @@ describe('BookReader', () => {
     const openPage = vi.fn();
     // 넷플릭스 페이지가 보낸 메시지를 content script가 받는 경로 그대로 처리한다.
     const netflixPut = (memo: Memo) =>
-      handleBridgeRequest(
+      handleBridgeCall(
         area,
         parseBridgeRequest({ channel: BRIDGE_REQUEST, requestId: memo.id, op: 'memos.put', memo })!,
         openPage

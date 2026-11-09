@@ -1,11 +1,19 @@
-import { OPEN_PAGE_MESSAGE, extensionPagePath, isExtensionPage } from '../../shared/bridge/protocol';
+import { DEFAULT_OAUTH_CLIENT_ID, FIREBASE_CONFIG } from '../../shared/firebase/config';
+import { createBackend, createUnconfiguredBackend } from './backend';
+import { serveChromePorts } from './server';
+import { launchGoogleSignIn } from './googleSignIn';
+import { cleanupOldLocalData } from './localCleanup';
 
-console.log('[NF-STUDY] Background service worker initialized.');
+// 서비스 워커. Firebase(로그인·Firestore)는 여기서만 돌고, 화면과 넷플릭스 content script는 포트로 부탁한다.
+cleanupOldLocalData(chrome.storage.local as never).catch((e) =>
+  console.error('[NF-STUDY] Failed to clean up old local data:', e instanceof Error ? e.name : 'error')
+);
 
-// 넷플릭스 페이지에서 원서 리더·메모 모아 보기를 새 탭으로 열어 달라는 요청을 처리한다.
-chrome.runtime.onMessage.addListener((request) => {
-  if (request?.type === OPEN_PAGE_MESSAGE && isExtensionPage(request.page)) {
-    chrome.tabs.create({ url: chrome.runtime.getURL(extensionPagePath(request.page)) });
-  }
-  return false;
-});
+serveChromePorts(
+  FIREBASE_CONFIG
+    ? createBackend({
+        config: FIREBASE_CONFIG,
+        getIdToken: () => launchGoogleSignIn(FIREBASE_CONFIG!.oauthClientId || DEFAULT_OAUTH_CLIENT_ID),
+      })
+    : createUnconfiguredBackend()
+);

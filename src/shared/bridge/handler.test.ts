@@ -1,16 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createMemoryArea } from '../storage/storageArea';
-import { putMemo, listMemos, saveBook, getChapterParagraphs, getUnplacedNetflixMemoIds, getBook, setChapterDone, updateReaderSettings } from '../storage/repo';
+import { getMemo, putMemo, listMemos, saveBook, getChapterParagraphs, getUnplacedNetflixMemoIds, getBook, setChapterDone, updateReaderSettings } from '../storage/repo';
 import { netflixMemo, bookMemo } from '../storage/testFixtures';
-import { BRIDGE_REQUEST, parseBridgeRequest } from './protocol';
-import { handleBridgeRequest } from './handler';
+import { BRIDGE_REQUEST, MAX_MEMO_CHARS, parseBridgeRequest } from './protocol';
+import { DEFAULT_NETFLIX_SETTINGS, MAX_CHECKLIST_CHARS } from './netflixRecords';
+import { handleBridgeCall } from './handler';
 
 const req = (body: Record<string, unknown>) => ({ channel: BRIDGE_REQUEST, requestId: 'r1', ...body });
 
-const run = async (area: ReturnType<typeof createMemoryArea>, body: Record<string, unknown>, openPage = vi.fn()) => {
+const run = async (
+  area: ReturnType<typeof createMemoryArea> | null,
+  body: Record<string, unknown>,
+  openPage = vi.fn()
+) => {
   const parsed = parseBridgeRequest(req(body));
   if (!parsed) return null;
-  return handleBridgeRequest(area, parsed, openPage);
+  const { channel: _c, requestId: _r, ...call } = parsed;
+  return handleBridgeCall(area, call as never, openPage);
 };
 
 describe('bridge request handling', () => {
@@ -27,13 +33,9 @@ describe('bridge request handling', () => {
     expect((await listMemos(area)).map((m) => m.id).sort()).toEqual(['b1', 'n2']);
   });
 
-  it('runs the legacy migration and opens extension pages', async () => {
+  it('4.7-3 has no legacy migration and opens extension pages', async () => {
     const area = createMemoryArea();
-    const result = await run(area, {
-      op: 'legacy.migrate',
-      payload: { annotations: {}, studiedVideos: null },
-    });
-    expect(result).toEqual({ ok: true, result: { copied: 0, failedVideoIds: [], completed: true } });
+    expect(await run(area, { op: 'legacy.migrate', payload: { annotations: {}, studiedVideos: null } })).toBeNull();
 
     const openPage = vi.fn();
     expect(await run(area, { op: 'page.open', page: 'memos' }, openPage)).toEqual({ ok: true });
@@ -81,6 +83,9 @@ describe('bridge request handling', () => {
       { op: 'memos.reportUnplaced', videoId: '../../done:bk1:c1', ids: [] },
       { op: 'memos.reportUnplaced', videoId: 'x', ids: ['reader:settings'] },
       { op: 'settings.set', settings: { allowOnlineVoices: true } },
+      { op: 'nfSettings.set', settings: { allowOnlineVoices: true } },
+      { op: 'checklist.get', videoId: '../done:bk1:c1' },
+      { op: 'studied.put', video: { videoId: '../reader:settings' } },
       { op: 'completion.set', bookId: 'bk1', chapterId: 'c1', done: false },
       { op: 'storage.get', keys: protectedKeys },
     ];
@@ -113,5 +118,96 @@ describe('bridge request handling', () => {
     expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v'.repeat(201), ids: [] }))).toBeNull();
     expect(parseBridgeRequest(req({ op: 'memos.reportUnplaced', videoId: 'v', ids: ['n'.repeat(201)] }))).toBeNull();
     expect(parseBridgeRequest({ op: 'memos.list', videoId: 'v', channel: BRIDGE_REQUEST })).toBeNull();
+  });
+
+  it('4.3-1 serves Netflix study records and nothing else', async () => {
+    const area = createMemoryArea();
+    const checklist = { currentActiveRound: 2, rounds: { 1: { 0: { preStudy: true } }, 2: {} } };
+    const video = { videoId: 'v1', title: 'Show', cover: '', epTitle: 'Ep', epSeq: 1, seasonSeq: 1, totalPages: 3, updatedAt: 5 };
+    const settings = { ...DEFAULT_NETFLIX_SETTINGS, isAutoPause: true, fontSize: 18 };
+    expect(await run(area, { op: 'nfSettings.get' })).toEqual({ ok: true, result: null });
+    expect(await run(area, { op: 'nfSettings.set', settings })).toEqual({ ok: true });
+    expect(await run(area, { op: 'nfSettings.get' })).toEqual({ ok: true, result: settings });
+    expect(await run(area, { op: 'checklist.set', videoId: 'v1', checklist })).toEqual({ ok: true });
+    expect(await run(area, { op: 'checklist.get', videoId: 'v1' })).toEqual({ ok: true, result: checklist });
+    expect(await run(area, { op: 'itemsPerPage.set', videoId: 'v1', value: 30 })).toEqual({ ok: true });
+    expect(await run(area, { op: 'itemsPerPage.get', videoId: 'v1' })).toEqual({ ok: true, result: 30 });
+    expect(await run(area, { op: 'studied.put', video })).toEqual({ ok: true });
+    expect(await run(area, { op: 'studied.list' })).toEqual({ ok: true, result: [video] });
+    expect(await run(area, { op: 'studied.delete', videoId: 'v1' })).toEqual({ ok: true });
+    expect(await run(area, { op: 'checklist.delete', videoId: 'v1' })).toEqual({ ok: true });
+    expect(await run(area, { op: 'studied.list' })).toEqual({ ok: true, result: [] });
+    expect((await area.getKeys()).sort()).toEqual(['nf:itemsPerPage:v1', 'nf:settings']);
+  });
+
+  it('4.3-1 refuses requests for books, book memos, account data and unknown operations', async () => {
+    const area = createMemoryArea();
+    await putMemo(area, bookMemo({ id: 'n-like', note: 'book secret' }));
+    for (const body of [
+      { op: 'books.list' },
+      { op: 'book.get', id: 'bk1' },
+      { op: 'chapter.get', bookId: 'bk1', chapterId: 'c1' },
+      { op: 'account.get' },
+      { op: 'auth.token' },
+      { op: 'auth.email' },
+      { op: 'area.get', keys: ['memo:n-like'] },
+    ]) {
+      expect(await run(area, body)).toBeNull();
+    }
+    // 넷플릭스 메모와 닮은 원서 메모 id는 덮어쓰거나 지울 수 없다.
+    expect(await run(area, { op: 'memos.put', memo: netflixMemo({ id: 'n-like' }) })).toEqual({ ok: false, error: 'invalid' });
+    expect(await run(area, { op: 'memos.delete', id: 'n-like' })).toEqual({ ok: false, error: 'invalid' });
+    expect((await getMemo(area, 'n-like'))!.note).toBe('book secret');
+    // 영상 id로 원서 메모를 찾으려 해도 넷플릭스 메모만 나온다.
+    expect(await run(area, { op: 'memos.list', videoId: 'bk1' })).toEqual({ ok: true, result: [] });
+  });
+
+  it('4.3-2 answers only signed in or not, and error codes without the original message', async () => {
+    expect(await run(null, { op: 'auth.status' })).toEqual({ ok: true, result: { signedIn: false } });
+    expect(await run(createMemoryArea(), { op: 'auth.status' })).toEqual({ ok: true, result: { signedIn: true } });
+    expect(await run(null, { op: 'memos.list', videoId: 'v1' })).toEqual({ ok: false, error: 'signed-out' });
+    const failing = createMemoryArea();
+    const denied = async (): Promise<never> => {
+      throw Object.assign(new Error('Missing permission on users/uid-secret-123/kv/memos-1'), { code: 'permission-denied' });
+    };
+    failing.get = denied;
+    failing.getKeys = denied;
+    const result = await run(failing, { op: 'memos.list', videoId: 'v1' });
+    expect(result).toEqual({ ok: false, error: 'permission-denied' });
+    expect(JSON.stringify(result)).not.toContain('uid-secret-123');
+  });
+
+  it('4.3-3 limits the size of new values: just under passes, over or malformed fails', () => {
+    const page = { preStudy: true, noSubtitles: false };
+    const rounds = (pages: number) => ({ 1: Object.fromEntries(Array.from({ length: pages }, (_, i) => [i, page])) });
+    const size = (v: unknown) => JSON.stringify(v).length;
+    let pages = 1;
+    while (size({ currentActiveRound: 1, rounds: rounds(pages + 1) }) <= MAX_CHECKLIST_CHARS && pages < 1000) pages++;
+    const under = { currentActiveRound: 1, rounds: rounds(pages) };
+    expect(size(under)).toBeLessThanOrEqual(MAX_CHECKLIST_CHARS);
+    expect(parseBridgeRequest(req({ op: 'checklist.set', videoId: 'v', checklist: under }))).not.toBeNull();
+    const over = { currentActiveRound: 1, rounds: { ...rounds(pages), 2: { 0: { preStudy: true, note: 'x'.repeat(MAX_CHECKLIST_CHARS) } } } };
+    expect(parseBridgeRequest(req({ op: 'checklist.set', videoId: 'v', checklist: over }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'checklist.set', videoId: 'v', checklist: { currentActiveRound: 'one', rounds: {} } }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'checklist.set', videoId: 'v', checklist: { currentActiveRound: 1, rounds: { 1: { 0: { a: 'yes' } } } } }))).toBeNull();
+
+    const video = { videoId: 'v1', title: 't'.repeat(500), cover: 'c'.repeat(2000), epTitle: '', epSeq: 1, seasonSeq: 1, totalPages: 3, updatedAt: 1 };
+    expect(parseBridgeRequest(req({ op: 'studied.put', video }))).not.toBeNull();
+    expect(parseBridgeRequest(req({ op: 'studied.put', video: { ...video, title: 't'.repeat(501) } }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'studied.put', video: { ...video, extra: 1 } }))).toBeNull();
+
+    expect(parseBridgeRequest(req({ op: 'itemsPerPage.set', videoId: 'v', value: 1000 }))).not.toBeNull();
+    expect(parseBridgeRequest(req({ op: 'itemsPerPage.set', videoId: 'v', value: 1001 }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'itemsPerPage.set', videoId: 'v', value: 2.5 }))).toBeNull();
+
+    const settings = { ...DEFAULT_NETFLIX_SETTINGS, fontSize: 40 };
+    expect(parseBridgeRequest(req({ op: 'nfSettings.set', settings }))).not.toBeNull();
+    expect(parseBridgeRequest(req({ op: 'nfSettings.set', settings: { ...settings, fontSize: 41 } }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'nfSettings.set', settings: { ...settings, extra: true } }))).toBeNull();
+
+    expect(parseBridgeRequest(req({ op: 'memos.put', memo: netflixMemo({ note: 'n'.repeat(MAX_MEMO_CHARS - 1000) }) }))).not.toBeNull();
+    expect(parseBridgeRequest(req({ op: 'memos.put', memo: netflixMemo({ note: 'n'.repeat(MAX_MEMO_CHARS) }) }))).toBeNull();
+    expect(parseBridgeRequest(req({ op: 'checklist.get', videoId: 'v'.repeat(200) }))).not.toBeNull();
+    expect(parseBridgeRequest(req({ op: 'checklist.get', videoId: 'v'.repeat(201) }))).toBeNull();
   });
 });

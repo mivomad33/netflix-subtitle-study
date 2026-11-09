@@ -34,6 +34,25 @@ if (fileSystem.existsSync(secretsPath)) {
 }
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
+// E2E 빌드(npm run build:e2e): 에뮬레이터에 붙고 테스트 로그인 경로가 있는 서비스 워커를 build-e2e에 만든다.
+const isE2E = process.env.NF_E2E === '1';
+
+// Firebase 웹 설정은 커밋하지 않는 로컬 파일(또는 환경 변수 NF_FIREBASE_CONFIG)에서 넣는다.
+// 없으면 null을 넣고, 그 빌드는 "Firebase 설정이 없습니다" 안내를 보인다(4.10-5).
+const FIREBASE_CONFIG_KEYS = ['apiKey', 'authDomain', 'projectId', 'appId', 'oauthClientId', 'siteUrl'];
+function loadFirebaseConfig() {
+  if (isE2E) {
+    return { apiKey: 'demo-key', authDomain: 'demo-nf-study.firebaseapp.com', projectId: 'demo-nf-study', appId: 'demo-app' };
+  }
+  let raw = process.env.NF_FIREBASE_CONFIG;
+  const file = path.resolve(__dirname, process.env.NF_FIREBASE_CONFIG_FILE || 'firebase.config.local.json');
+  if (!raw && fileSystem.existsSync(file)) raw = fileSystem.readFileSync(file, 'utf8');
+  if (!raw) return null;
+  const parsed = JSON.parse(raw);
+  const config = Object.fromEntries(FIREBASE_CONFIG_KEYS.filter((k) => parsed[k]).map((k) => [k, String(parsed[k])]));
+  return config.apiKey && config.projectId && config.appId ? config : null;
+}
+const firebaseConfig = loadFirebaseConfig();
 
 var options = {
   mode: process.env.NODE_ENV || 'development',
@@ -44,9 +63,13 @@ var options = {
     reader: path.join(__dirname, 'src', 'pages', 'Reader', 'index.tsx'),
     // 개발 서버에서만: chrome.* 대신 메모리 저장소로 원서 리더를 띄운다(4.10-2).
     ...(isDevelopment
-      ? { readerDev: path.join(__dirname, 'src', 'pages', 'Reader', 'dev.tsx') }
+      ? {
+          readerDev: path.join(__dirname, 'src', 'pages', 'Reader', 'dev.tsx'),
+          // 넷플릭스 밖에서 학습 패널의 로그인 안내 상태를 보는 개발 화면(4.11-3).
+          netflixDev: path.join(__dirname, 'src', 'pages', 'Content', 'dev.tsx'),
+        }
       : {}),
-    background: path.join(__dirname, 'src', 'pages', 'Background', 'index.ts'),
+    background: path.join(__dirname, 'src', 'pages', 'Background', isE2E ? 'e2e.ts' : 'index.ts'),
     contentScript: path.join(__dirname, 'src', 'pages', 'Content', 'index.tsx'),
     contentLoader: path.join(
       __dirname,
@@ -63,7 +86,7 @@ var options = {
   },
   output: {
     filename: '[name].bundle.js',
-    path: path.resolve(__dirname, 'build'),
+    path: path.resolve(__dirname, isE2E ? 'build-e2e' : 'build'),
     clean: true,
     publicPath: ASSET_PATH,
   },
@@ -150,11 +173,15 @@ var options = {
     new webpack.ProgressPlugin(),
     // expose and write the allowed env vars on the compiled bundle
     new webpack.EnvironmentPlugin(['NODE_ENV']),
+    new webpack.DefinePlugin({
+      __NF_FIREBASE_CONFIG__: JSON.stringify(firebaseConfig),
+      __NF_E2E__: JSON.stringify(isE2E),
+    }),
     new CopyWebpackPlugin({
       patterns: [
         {
           from: 'src/manifest.json',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
           force: true,
           transform: function (content, path) {
             // generates the manifest file using the package.json informations
@@ -173,7 +200,7 @@ var options = {
       patterns: [
         {
           from: 'src/pages/Content/content.styles.css',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
           force: true,
         },
       ],
@@ -182,7 +209,7 @@ var options = {
       patterns: [
         {
           from: 'src/assets/img/icon-128.png',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
           force: true,
         },
       ],
@@ -191,7 +218,7 @@ var options = {
       patterns: [
         {
           from: 'src/assets/img/icon-34.png',
-          to: path.join(__dirname, 'build'),
+          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
           force: true,
         },
       ],
@@ -225,6 +252,13 @@ var options = {
         template: path.join(__dirname, 'src', 'pages', 'Reader', 'index.html'),
         filename: 'reader-dev.html',
         chunks: ['readerDev'],
+        cache: false,
+      }),
+    isDevelopment &&
+      new HtmlWebpackPlugin({
+        template: path.join(__dirname, 'src', 'pages', 'Content', 'dev.html'),
+        filename: 'netflix-dev.html',
+        chunks: ['netflixDev'],
         cache: false,
       }),
     new HtmlWebpackPlugin({

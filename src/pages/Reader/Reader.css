@@ -962,3 +962,179 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* 로그인 전 화면(4.1-2, 4.9-1) */
+.nfr-signin {
+  display: flex;
+  justify-content: center;
+  padding: 64px 24px;
+}
+
+.nfr-signin-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 24px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius);
+  background: var(--nfr-surface);
+}
+
+.nfr-signin-title {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.nfr-signin-desc {
+  margin: 0 0 16px;
+  line-height: 1.6;
+}
+
+.nfr-signin-notice {
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-surface-soft);
+  font-size: 13px;
+}
+
+.nfr-signin-button {
+  padding: 8px 16px;
+  font-size: 15px;
+}
+
+.nfr-signin-hint {
+  margin: 8px 0 0;
+  color: var(--nfr-text-muted);
+  font-size: 13px;
+}
+
+.nfr-wait {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--nfr-text-muted);
+}
+
+.nfr-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--nfr-border);
+  border-top-color: var(--nfr-primary);
+  border-radius: 50%;
+  animation: nfr-spin 0.8s linear infinite;
+}
+
+@keyframes nfr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nfr-spinner {
+    animation: none;
+  }
+}
+
+.nfr-policy-links {
+  margin: 20px 0 0;
+  font-size: 12px;
+  color: var(--nfr-text-muted);
+}
+
+.nfr-policy-links a {
+  color: var(--nfr-text-button);
+}
+
+.nfr-policy-links a:focus-visible {
+  outline: 2px solid var(--nfr-primary);
+  outline-offset: 2px;
+}
+
+/* 머리글의 계정 표시(4.1-1, 4.4-1) */
+.nfr-account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.nfr-account-email {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nfr-text-button);
+}
+
+.nfr-account-usage {
+  color: var(--nfr-text-muted);
+  white-space: nowrap;
+}
+
+.nfr-account-usage.full {
+  color: var(--nfr-danger);
+  font-weight: 600;
+}
+
+/* 확인 대화상자(로그아웃, 탈퇴) */
+.nfr-dialog {
+  width: min(480px, calc(100vw - 48px));
+  padding: 24px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius);
+  background: var(--nfr-surface);
+  color: var(--nfr-text);
+  font-family: var(--nfr-font);
+}
+
+.nfr-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.nfr-dialog-title {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.nfr-dialog-body p {
+  margin: 0 0 12px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.nfr-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.nfr-dialog-error {
+  padding: 8px 12px;
+  border: 1px solid var(--nfr-danger-border);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-danger-bg);
+  color: var(--nfr-danger);
+}
+
+.nfr-dialog-note {
+  color: var(--nfr-text-muted);
+  font-size: 13px;
+}
+
+/* 저장소 오류 안내(4.4-2, 4.4-3) */
+.nfr-storage-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 24px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--nfr-danger-border);
+  border-radius: var(--nfr-radius);
+  background: var(--nfr-danger-bg);
+  color: var(--nfr-danger);
+  font-size: 13px;
+}

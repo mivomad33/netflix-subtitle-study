@@ -1,0 +1,10 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "kv", "fieldPath": "e", "indexes": [] },
+    { "collectionGroup": "ch", "fieldPath": "t", "indexes": [] },
+    { "collectionGroup": "ch", "fieldPath": "i", "indexes": [] },
+    { "collectionGroup": "ch", "fieldPath": "n", "indexes": [] },
+    { "collectionGroup": "ch", "fieldPath": "v", "indexes": [] }
+  ]
+}

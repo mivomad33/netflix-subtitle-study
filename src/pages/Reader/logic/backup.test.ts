@@ -3,7 +3,8 @@ import {
   createMemoryArea,
   StorageArea,
 } from '../../../shared/storage/storageArea';
-import { KEY } from '../../../shared/storage/keys';
+import { KEY, NETFLIX_KEY } from '../../../shared/storage/keys';
+import { DEFAULT_NETFLIX_SETTINGS } from '../../../shared/bridge/netflixRecords';
 import { BookMeta } from '../../../shared/memo/types';
 import { bookMemo, netflixMemo } from '../../../shared/storage/testFixtures';
 import {
@@ -40,7 +41,7 @@ const seed = () => ({
     updatedAt: 5,
   },
   [KEY.readerSettings]: { fontSize: 18 },
-  [KEY.legacyMigration]: { done: true },
+  [KEY.netflixUnplaced('v1')]: ['n1'],
 });
 
 async function snapshot(area: StorageArea) {
@@ -78,7 +79,7 @@ describe('exportBackup', () => {
     expect(parsed.data[KEY.memo('n1')]).toEqual(netflixMemo());
     expect(parsed.data[KEY.position('bk1')].paragraphIndex).toBe(1);
     expect(parsed.data[KEY.readerSettings]).toEqual({ fontSize: 18 });
-    expect(parsed.data[KEY.legacyMigration]).toBeUndefined();
+    expect(parsed.data[KEY.netflixUnplaced('v1')]).toBeUndefined();
     expect(counts).toEqual({ books: 1, memos: 2 });
   });
 
@@ -318,6 +319,71 @@ describe('parseBackup', () => {
 
 function seedWithoutLegacy() {
   const data: Record<string, unknown> = seed();
-  delete data[KEY.legacyMigration];
+  delete data[KEY.netflixUnplaced('v1')];
   return data;
 }
+
+// 넷플릭스 학습 기록(백업 형식 2). 값은 직접 만든 가짜다.
+const studiedV1 = {
+  videoId: 'v1',
+  title: 'Garden Show',
+  cover: '',
+  epTitle: 'Pilot',
+  epSeq: 1,
+  seasonSeq: 1,
+  totalPages: 3,
+  updatedAt: 10,
+};
+const netflixRecords = () => ({
+  [NETFLIX_KEY.settings]: { ...DEFAULT_NETFLIX_SETTINGS, fontSize: 18 },
+  [NETFLIX_KEY.checklist('v1')]: { currentActiveRound: 1, rounds: { '1': { '0': { '3': true, '4': false } } } },
+  [NETFLIX_KEY.itemsPerPage('v1')]: 30,
+  [NETFLIX_KEY.studied('v1')]: studiedV1,
+});
+
+describe('4.8-1 4.8-2 backup format 2 with Netflix records', () => {
+  it('exports Netflix records but not the unplaced memo lists', async () => {
+    const area = createMemoryArea({ ...seed(), ...netflixRecords() });
+    const { json } = await exportBackup(area);
+    const file = JSON.parse(json);
+    expect(file.version).toBe(2);
+    expect(file.data).toMatchObject(netflixRecords());
+    expect(file.data[KEY.netflixUnplaced('v1')]).toBeUndefined();
+    expect(parseBackup(json).ok).toBe(true);
+  });
+
+  it('still reads a version 1 file', () => {
+    const v1 = JSON.stringify({ format: BACKUP_FORMAT, version: 1, exportedAt: '', data: seedWithoutLegacy() });
+    expect(parseBackup(v1)).toMatchObject({ ok: true, counts: { books: 1, memos: 2 } });
+  });
+
+  it('rejects broken Netflix records', () => {
+    const cases: Array<[Record<string, unknown>, RegExp]> = [
+      [{ [NETFLIX_KEY.settings]: { fontSize: 18 } }, /넷플릭스 설정/],
+      [{ [NETFLIX_KEY.checklist('v1')]: [true] }, /체크리스트/],
+      [{ [NETFLIX_KEY.itemsPerPage('v1')]: 0 }, /페이지당/],
+      [{ [NETFLIX_KEY.studied('v2')]: studiedV1 }, /공부한 영상/],
+    ];
+    cases.forEach(([data, pattern]) => {
+      const result = parseBackup(fileWith(data));
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toMatch(pattern);
+    });
+  });
+
+  it('keeps current values without updatedAt and takes the newer studied video', async () => {
+    const current = {
+      [NETFLIX_KEY.settings]: { ...DEFAULT_NETFLIX_SETTINGS, fontSize: 22 },
+      [NETFLIX_KEY.studied('v1')]: { ...studiedV1, totalPages: 1, updatedAt: 5 },
+    };
+    const area = createMemoryArea(current);
+    const parsed = parseBackup(fileWith(netflixRecords()));
+    if (!parsed.ok) throw new Error(parsed.error);
+    await mergeBackup(area, parsed.backup);
+    const after = await area.get(await area.getKeys());
+    expect(after[NETFLIX_KEY.settings]).toEqual(current[NETFLIX_KEY.settings]);
+    expect(after[NETFLIX_KEY.studied('v1')]).toEqual(studiedV1);
+    expect(after[NETFLIX_KEY.checklist('v1')]).toEqual(netflixRecords()[NETFLIX_KEY.checklist('v1')]);
+    expect(after[NETFLIX_KEY.itemsPerPage('v1')]).toBe(30);
+  });
+});

@@ -27,6 +27,8 @@ interface StudyControlPanelProps {
   handleItemsPerPageChange: (size: number) => void;
   settingsRef: React.RefObject<HTMLDivElement>;
   onResetStudyProgress: () => void;
+  // 로그인해 학습 기록을 저장할 수 있는지. 아니면 기록 초기화를 숨긴다(지울 기록이 없다).
+  canSaveProgress?: boolean;
 }
 
 export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
@@ -56,17 +58,14 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
   handleItemsPerPageChange,
   settingsRef,
   onResetStudyProgress,
+  canSaveProgress = true,
 }) => {
   return (
     <div className="control-panel">
       <button
         className={`toggle-all-btn ${isEnglishVisible ? 'active' : ''}`}
         onClick={() => {
-          setIsEnglishVisible((prev) => {
-            const next = !prev;
-            localStorage.setItem('NF_isEnglishVisible', next.toString());
-            return next;
-          });
+          setIsEnglishVisible((prev) => !prev);
         }}
       >
         💬 영어 자막
@@ -74,11 +73,7 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
       <button
         className={`toggle-all-btn ${isAllVisible ? 'active' : ''}`}
         onClick={() => {
-          setIsAllVisible((prev) => {
-            const next = !prev;
-            localStorage.setItem('NF_isKoreanVisible', next.toString());
-            return next;
-          });
+          setIsAllVisible((prev) => !prev);
         }}
       >
         💬 한국어 자막
@@ -86,11 +81,7 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
       <button
         className={`toggle-all-btn ${isAutoPause ? 'active' : ''}`}
         onClick={() => {
-          setIsAutoPause((prev) => {
-            const next = !prev;
-            localStorage.setItem('NF_isAutoPause', next.toString());
-            return next;
-          });
+          setIsAutoPause((prev) => !prev);
         }}
       >
         ⏱️ 자동 멈춤
@@ -99,11 +90,7 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
         className={`toggle-all-btn ${isSentenceLoop ? 'active' : ''}`}
         onClick={() => {
           if (setIsSentenceLoop) {
-            setIsSentenceLoop((prev) => {
-              const next = !prev;
-              localStorage.setItem('NF_isSentenceLoop', next.toString());
-              return next;
-            });
+            setIsSentenceLoop((prev) => !prev);
           }
         }}
         title="현재 자막이 끝나면 자동으로 처음부터 무한 반복합니다."
@@ -113,11 +100,7 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
       <button
         className={`toggle-all-btn ${isPageEndPause ? 'active' : ''}`}
         onClick={() => {
-          setIsPageEndPause((prev) => {
-            const next = !prev;
-            localStorage.setItem('NF_isPageEndPause', next.toString());
-            return next;
-          });
+          setIsPageEndPause((prev) => !prev);
         }}
         title="한 페이지(10문장 단위)의 마지막 대사 재생 후 자동으로 일시정지합니다."
       >
@@ -128,10 +111,8 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
         onClick={() => {
           setIsAutoSkip((prev) => {
             const next = !prev;
-            localStorage.setItem('NF_isAutoSkip', next.toString());
             if (next && setIsSmartSkim) {
               setIsSmartSkim(false);
-              localStorage.setItem('NF_isSmartSkim', 'false');
             }
             return next;
           });
@@ -146,10 +127,8 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
           if (setIsSmartSkim) {
             setIsSmartSkim((prev) => {
               const next = !prev;
-              localStorage.setItem('NF_isSmartSkim', next.toString());
               if (next) {
                 setIsAutoSkip(false);
-                localStorage.setItem('NF_isAutoSkip', 'false');
               }
               return next;
             });
@@ -231,16 +210,18 @@ export const StudyControlPanel: React.FC<StudyControlPanelProps> = ({
                 * 변경 시 현재 영상의 체크리스트가 초기화됩니다.
               </div>
             </div>
-            <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid #374151', paddingTop: '12px' }}>
-              <div className="settings-label" style={{ color: '#f87171' }}>위험 구역</div>
-              <button
-                className="reset-progress-btn"
-                onClick={onResetStudyProgress}
-                title="이 영상의 모든 회차 학습 기록을 초기화합니다."
-              >
-                현재 영상 학습 초기화
-              </button>
-            </div>
+            {canSaveProgress && (
+              <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid #374151', paddingTop: '12px' }}>
+                <div className="settings-label" style={{ color: '#f87171' }}>위험 구역</div>
+                <button
+                  className="reset-progress-btn"
+                  onClick={onResetStudyProgress}
+                  title="이 영상의 모든 회차 학습 기록을 초기화합니다."
+                >
+                  현재 영상 학습 초기화
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

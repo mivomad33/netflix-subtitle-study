@@ -1,6 +1,12 @@
 // 메모·책·읽기 위치·학습 완료·설정을 파일 하나로 내보내고, 다시 합쳐 넣는다.
 import { StorageArea } from '../../../shared/storage/storageArea';
-import { KEY, PREFIX, chapterKeyPrefix } from '../../../shared/storage/keys';
+import { KEY, NETFLIX_KEY, NETFLIX_PREFIX, PREFIX, chapterKeyPrefix } from '../../../shared/storage/keys';
+import {
+  isValidChecklist,
+  isValidItemsPerPage,
+  isValidNetflixSettings,
+  isValidStudiedVideo,
+} from '../../../shared/bridge/netflixRecords';
 import {
   isValidBookMeta,
   isValidCompletion,
@@ -10,7 +16,8 @@ import {
 } from '../../../shared/memo/types';
 
 export const BACKUP_FORMAT = 'nf-study-backup';
-export const BACKUP_VERSION = 1;
+// 2: 넷플릭스 학습 기록(nf: 키)을 더했다. 1도 그대로 받는다.
+export const BACKUP_VERSION = 2;
 
 export interface Backup {
   format: typeof BACKUP_FORMAT;
@@ -28,10 +35,13 @@ export type ParseResult =
   | { ok: true; backup: Backup; counts: BackupCounts }
   | { ok: false; error: string };
 
-const BACKUP_PREFIXES = Object.values(PREFIX);
+// 위치를 찾지 못한 메모 목록(meta:)은 패널을 열 때마다 다시 쓰므로 넣지 않는다.
+const BACKUP_PREFIXES = [...Object.values(PREFIX), ...Object.values(NETFLIX_PREFIX)];
 
 const isBackupKey = (key: string) =>
-  key === KEY.readerSettings || BACKUP_PREFIXES.some((p) => key.startsWith(p));
+  key === KEY.readerSettings ||
+  key === NETFLIX_KEY.settings ||
+  BACKUP_PREFIXES.some((p) => key.startsWith(p));
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -95,6 +105,22 @@ function checkEntry(key: string, value: unknown): string | null {
       ? null
       : `학습 완료 기록 "${key.slice(PREFIX.completion.length)}"의 값이 올바르지 않습니다.`;
   }
+  if (key === NETFLIX_KEY.settings) {
+    return isValidNetflixSettings(value) ? null : '넷플릭스 설정 값이 올바르지 않습니다.';
+  }
+  if (key.startsWith(NETFLIX_PREFIX.checklist)) {
+    return isValidChecklist(value) ? null : `넷플릭스 체크리스트 "${key.slice(NETFLIX_PREFIX.checklist.length)}"의 값이 올바르지 않습니다.`;
+  }
+  if (key.startsWith(NETFLIX_PREFIX.itemsPerPage)) {
+    return isValidItemsPerPage(value)
+      ? null
+      : `넷플릭스 페이지당 대사 수 "${key.slice(NETFLIX_PREFIX.itemsPerPage.length)}"의 값이 올바르지 않습니다.`;
+  }
+  if (key.startsWith(NETFLIX_PREFIX.studied)) {
+    return isValidStudiedVideo(value) && NETFLIX_KEY.studied(value.videoId) === key
+      ? null
+      : `공부한 영상 "${key.slice(NETFLIX_PREFIX.studied.length)}"의 값이 올바르지 않습니다.`;
+  }
   return `알 수 없는 항목 "${key}"이 들어 있습니다.`;
 }
 
@@ -156,12 +182,17 @@ export function parseBackup(text: string): ParseResult {
   return { ok: true, backup, counts: countOf(backup.data) };
 }
 
-const updatedAtOf = (v: unknown) => (v as { updatedAt: number }).updatedAt;
+const updatedAtOf = (v: unknown): number | null => {
+  const at = (v as { updatedAt?: unknown } | null)?.updatedAt;
+  return typeof at === 'number' && Number.isFinite(at) ? at : null;
+};
 
-// 지금 있는 것과 파일을 합친다. 지우는 것은 없고, 겹치면 updatedAt이 더 새 쪽을 남긴다(같으면 지금 것).
+// 지금 있는 것과 파일을 합친다. 지우는 것은 없다. 겹치면 updatedAt이 더 새 쪽을 남기고(같으면 지금 것),
+// updatedAt이 없는 항목(설정, 체크리스트 등)은 지금 값이 있으면 지금 값을 남긴다.
+// 합친 뒤 저장량이 20MB를 넘으면 저장소가 쓰기 전에 거절한다(quota-exceeded, 4.8-2).
 // 돌려주는 개수는 메모와 책만 센다.
 export async function mergeBackup(area: StorageArea, backup: Backup) {
-  const fileKeys = Object.keys(backup.data);
+  const fileKeys = Object.keys(backup.data).filter(isBackupKey);
   // 장 본문은 비교하지 않으므로 읽지 않는다.
   const compared = fileKeys.filter((k) => !k.startsWith(PREFIX.chapter));
   const current = compared.length > 0 ? await area.get(compared) : {};
@@ -169,26 +200,27 @@ export async function mergeBackup(area: StorageArea, backup: Backup) {
   const result = { added: 0, updated: 0, kept: 0 };
   const replacedBooks = new Set<string>();
 
-  for (const key of fileKeys) {
+  for (const key of compared) {
     const incoming = backup.data[key];
     const isRecord = key.startsWith(PREFIX.memo) || key.startsWith(PREFIX.book);
-    // 읽기 위치와 학습 완료는 개수에 세지 않고, 키(책·장)마다 나중에 바꾼 쪽을 남긴다.
-    if (!isRecord && !key.startsWith(PREFIX.position) && !key.startsWith(PREFIX.completion)) continue;
     const existing = current[key];
     let take = false;
     if (existing === undefined) {
       take = true;
       if (isRecord) result.added += 1;
-    } else if (updatedAtOf(incoming) > updatedAtOf(existing)) {
-      take = true;
-      if (isRecord) result.updated += 1;
-    } else if (isRecord) {
-      result.kept += 1;
+    } else {
+      const incomingAt = updatedAtOf(incoming);
+      const existingAt = updatedAtOf(existing);
+      if (incomingAt !== null && existingAt !== null && incomingAt > existingAt) {
+        take = true;
+        if (isRecord) result.updated += 1;
+      } else if (isRecord) {
+        result.kept += 1;
+      }
     }
     if (take) {
       items[key] = incoming;
-      if (key.startsWith(PREFIX.book))
-        replacedBooks.add(key.slice(PREFIX.book.length));
+      if (key.startsWith(PREFIX.book)) replacedBooks.add(key.slice(PREFIX.book.length));
     }
   }
 
@@ -197,13 +229,6 @@ export async function mergeBackup(area: StorageArea, backup: Backup) {
     if (Array.from(replacedBooks).some((bookId) => key.startsWith(chapterKeyPrefix(bookId)))) {
       items[key] = backup.data[key];
     }
-  }
-
-  if (
-    KEY.readerSettings in backup.data &&
-    current[KEY.readerSettings] === undefined
-  ) {
-    items[KEY.readerSettings] = backup.data[KEY.readerSettings];
   }
 
   if (Object.keys(items).length > 0) await area.set(items);

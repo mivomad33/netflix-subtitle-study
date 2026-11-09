@@ -1,20 +1,26 @@
+// 넷플릭스 사이트 localStorage에서 이 확장 프로그램이 쓰는 키.
+// 자막 처리 값 둘만 계속 쓴다. 학습 기록이 아니라 그 브라우저의 자막 처리 상태라서다(명세서 2장).
 export const STORAGE_KEYS = {
-  IS_PANEL_VISIBLE: 'NF_isPanelVisible',
-  IS_OVERLAY_VISIBLE: 'NF_isOverlayVisible',
-  IS_ENGLISH_VISIBLE: 'NF_isEnglishVisible',
-  IS_KOREAN_VISIBLE: 'NF_isKoreanVisible',
-  IS_AUTO_PAUSE: 'NF_isAutoPause',
-  IS_PAGE_END_PAUSE: 'NF_isPageEndPause',
-  IS_AUTO_SKIP: 'NF_isAutoSkip',
-  IS_SMART_SKIM: 'NF_isSmartSkim',
-  IS_SENTENCE_LOOP: 'NF_isSentenceLoop',
-  FONT_SIZE: 'NF_fontSize',
-  ITEMS_PER_PAGE_PREFIX: 'NF_itemsPerPage_',
-  CHECKLIST_PREFIX: 'NF_checklist_',
-  // 옛 메모 위치. 공통 저장소로 복사한 뒤에도 지우지 않는다(storeClient.ts의 이전 참고).
-  LEGACY_ANNOTATIONS_PREFIX: 'NF_annotations_',
-  STUDIED_VIDEOS: 'NF_studied_videos',
-  STUDY_PANEL_WIDTH_RATIO: 'NF_studyPanelWidthRatio',
   LINGO_ACTIVE: 'NF_lingoActive',
   PREFERRED_TEXT_LOCALE: 'NF_preferredTextLocale',
 } as const;
+
+// 예전에 학습 기록을 두던 키. 지금은 로그인한 사용자의 저장소에 쓰고, 이 키들은 넷플릭스 화면이 열릴 때마다 지운다(4.7-2).
+// 새 코드는 이 키를 쓰지 않으므로 지운 표시 없이 매번 지워도 결과가 같다.
+export const LEGACY_STUDY_KEYS = [
+  'NF_isPanelVisible',
+  'NF_isOverlayVisible',
+  'NF_isEnglishVisible',
+  'NF_isKoreanVisible',
+  'NF_isAutoPause',
+  'NF_isPageEndPause',
+  'NF_isAutoSkip',
+  'NF_isSmartSkim',
+  'NF_isSentenceLoop',
+  'NF_fontSize',
+  'NF_studied_videos',
+  'NF_studyPanelWidthRatio',
+] as const;
+
+// 영상마다 하나씩 있던 키의 접두어. 예전 메모(NF_annotations_*)도 옮기지 않고 지운다(4.7-3).
+export const LEGACY_STUDY_PREFIXES = ['NF_itemsPerPage_', 'NF_checklist_', 'NF_annotations_'] as const;

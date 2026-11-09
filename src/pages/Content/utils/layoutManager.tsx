@@ -5,31 +5,51 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import StudyPanel from '../StudyPanel';
 import { exportDataMap } from './networkInterceptor';
-import { STORAGE_KEYS } from '../constants/storageKeys';
+import { getNetflixSettings, subscribeStudyStore, updateNetflixSettings } from './studyStore';
 
 let root: Root | null = null;
 let divider: HTMLDivElement | null = null;
 let renderedVideoId: string | number | null = null;
 
-let isPanelVisible = localStorage.getItem(STORAGE_KEYS.IS_PANEL_VISIBLE) !== 'false';
-let isOverlayVisible = localStorage.getItem(STORAGE_KEYS.IS_OVERLAY_VISIBLE) === 'true';
+// 패널·오버레이 표시와 너비 비율은 설정(studyStore)에 있다. 처음에는 기본값으로 그리고,
+// 저장된 설정을 읽어 오면 그때 한 번 더 그린다.
+export const getIsPanelVisible = () => getNetflixSettings().isPanelVisible;
+export const getIsOverlayVisible = () => getNetflixSettings().isOverlayVisible;
 
-export const getIsPanelVisible = () => isPanelVisible;
-export const getIsOverlayVisible = () => isOverlayVisible;
+// 영상 쪽 너비. 저장된 비율이 없으면 40%.
+const layoutWidths = () => {
+  const ratio = getNetflixSettings().studyPanelWidthRatio;
+  return ratio
+    ? { video: `${ratio * 100}%`, panel: `${(1 - ratio) * 100}%` }
+    : { video: '40%', panel: '60%' };
+};
 
 export const togglePanelVisibility = () => {
-  isPanelVisible = !isPanelVisible;
-  localStorage.setItem(STORAGE_KEYS.IS_PANEL_VISIBLE, isPanelVisible.toString());
+  updateNetflixSettings((s) => ({ isPanelVisible: !s.isPanelVisible }));
   applyExtensionStates();
 };
 
 export const toggleOverlayVisibility = () => {
-  isOverlayVisible = !isOverlayVisible;
-  localStorage.setItem(STORAGE_KEYS.IS_OVERLAY_VISIBLE, isOverlayVisible.toString());
+  updateNetflixSettings((s) => ({ isOverlayVisible: !s.isOverlayVisible }));
+  applyExtensionStates();
+};
+
+// 마지막으로 화면에 반영한 레이아웃 설정. 다른 설정이 바뀔 때는 다시 그리지 않는다.
+let appliedLayout = '';
+const layoutSignature = () => {
+  const s = getNetflixSettings();
+  return `${s.isPanelVisible}|${s.isOverlayVisible}|${s.studyPanelWidthRatio}`;
+};
+let unsubscribeStore: (() => void) | null = null;
+
+const handleStoreChange = () => {
+  if (renderedVideoId === null || layoutSignature() === appliedLayout) return;
   applyExtensionStates();
 };
 
 export const applyExtensionStates = () => {
+  appliedLayout = layoutSignature();
+  const { isPanelVisible, isOverlayVisible } = getNetflixSettings();
   console.log('[NF-STUDY] applyExtensionStates. isPanelVisible:', isPanelVisible, 'isOverlayVisible:', isOverlayVisible);
   const appMountPoint = document.getElementById('appMountPoint');
   const studyPanel = document.getElementById('studyPanel');
@@ -65,13 +85,10 @@ export const applyExtensionStates = () => {
     if (isPanelVisible) {
       studyPanel.style.display = 'block';
       divElement.style.display = 'block';
-      const savedRatio = localStorage.getItem(STORAGE_KEYS.STUDY_PANEL_WIDTH_RATIO);
-      const defaultWidth = savedRatio ? `${parseFloat(savedRatio) * 100}%` : '40%';
-      const panelWidth = savedRatio ? `${(1 - parseFloat(savedRatio)) * 100}%` : '60%';
-
-      appMountPoint.style.width = defaultWidth;
-      studyPanel.style.width = panelWidth;
-      divElement.style.left = defaultWidth;
+      const widths = layoutWidths();
+      appMountPoint.style.width = widths.video;
+      studyPanel.style.width = widths.panel;
+      divElement.style.left = widths.video;
     } else {
       studyPanel.style.display = 'none';
       divElement.style.display = 'none';
@@ -137,11 +154,8 @@ export const setupUI = (exportData: any, videoId: string | number) => {
   console.log('[NF-STUDY] Found appMountPoint. Modifying body style & injecting layouts.');
   document.body.style.display = 'flex';
 
-  const savedRatio = localStorage.getItem(STORAGE_KEYS.STUDY_PANEL_WIDTH_RATIO);
-  const defaultWidth = savedRatio ? `${parseFloat(savedRatio) * 100}%` : '40%';
-  const panelWidth = savedRatio
-    ? `${(1 - parseFloat(savedRatio)) * 100}%`
-    : '60%';
+  if (!unsubscribeStore) unsubscribeStore = subscribeStudyStore(handleStoreChange);
+  const { video: defaultWidth, panel: panelWidth } = layoutWidths();
 
   appMountPoint.style.width = defaultWidth;
   appMountPoint.style.position = 'relative';
@@ -198,13 +212,16 @@ export const setupUI = (exportData: any, videoId: string | number) => {
   document.addEventListener('mouseup', () => {
     if (isDragging) {
       const ratio = appMountPoint.offsetWidth / window.innerWidth;
-      localStorage.setItem(STORAGE_KEYS.STUDY_PANEL_WIDTH_RATIO, ratio.toString());
+      // 저장소의 범위(0.1~0.9)를 넘지 않게 자르고 소수 넷째 자리까지만 남긴다.
+      const clamped = Math.min(0.9, Math.max(0.1, Math.round(ratio * 10000) / 10000));
+      updateNetflixSettings({ studyPanelWidthRatio: clamped });
       console.log('[NF-STUDY] Divider drag ended. New Ratio:', ratio);
     }
     isDragging = false;
     document.body.style.cursor = 'default';
   });
 
+  const { isPanelVisible, isOverlayVisible } = getNetflixSettings();
   if (isPanelVisible || isOverlayVisible) {
     console.log('[NF-STUDY] Mounting StudyPanel root (either panel or overlay is enabled).');
     root = createRoot(studyPanel);
@@ -256,11 +273,11 @@ export const cleanupUI = () => {
 };
 
 export const setIsPanelVisible = (value: boolean) => {
-  isPanelVisible = value;
+  updateNetflixSettings({ isPanelVisible: value });
 };
 
 export const setIsOverlayVisible = (value: boolean) => {
-  isOverlayVisible = value;
+  updateNetflixSettings({ isOverlayVisible: value });
 };
 
 export const resetRenderedVideoId = () => {

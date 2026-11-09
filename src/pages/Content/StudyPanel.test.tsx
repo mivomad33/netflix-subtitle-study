@@ -5,6 +5,8 @@ import { createDirectClient } from '../../shared/bridge/directClient';
 import { getMemo, getUnplacedNetflixMemoIds, listMemos, putMemo } from '../../shared/storage/repo';
 import { netflixMemo } from '../../shared/storage/testFixtures';
 import { setStoreClient } from './utils/storeClient';
+import { installFakeStore } from './testing/fakeStore';
+import { removeLegacyStudyKeys } from './utils/legacyCleanup';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import StudyPanel from './StudyPanel';
 
@@ -17,8 +19,12 @@ describe('StudyPanel Main Component', () => {
   const mockTogglePanel = vi.fn();
   const mockToggleOverlay = vi.fn();
 
+  let store: ReturnType<typeof installFakeStore>;
+
   beforeEach(() => {
     localStorage.clear();
+    // 기본은 로그인한 상태의 빈 저장소
+    store = installFakeStore();
     // 넷플릭스 API 전역 가드 목킹
     (window as any).netflix = {
       appContext: {
@@ -53,6 +59,7 @@ describe('StudyPanel Main Component', () => {
 
   afterEach(() => {
     delete (window as any).netflix;
+    setStoreClient(null);
     vi.restoreAllMocks();
   });
 
@@ -102,7 +109,7 @@ describe('StudyPanel Main Component', () => {
     expect(screen.getByText('페이지당 대사 수')).toBeInTheDocument();
   });
 
-  it('renders round selector dropdown with current rounds', () => {
+  it('renders round selector dropdown with current rounds', async () => {
     render(
       <StudyPanel
         sentences={mockSentences}
@@ -114,10 +121,10 @@ describe('StudyPanel Main Component', () => {
       />
     );
 
-    expect(screen.getByText('1회차')).toBeInTheDocument();
+    expect(await screen.findByText('1회차')).toBeInTheDocument();
   });
 
-  it('shows next round button only when all pages checklist are complete', () => {
+  it('shows next round button only when all pages checklist are complete', async () => {
     const fullChecklist = {
       currentActiveRound: 1,
       rounds: {
@@ -126,7 +133,7 @@ describe('StudyPanel Main Component', () => {
         }
       }
     };
-    localStorage.setItem('NF_checklist_12345', JSON.stringify(fullChecklist));
+    await store.area!.set({ 'nf:checklist:12345': fullChecklist });
 
     render(
       <StudyPanel
@@ -139,15 +146,19 @@ describe('StudyPanel Main Component', () => {
       />
     );
 
-    expect(screen.getByText('1회차 🏆')).toBeInTheDocument();
+    expect(await screen.findByText('1회차 🏆')).toBeInTheDocument();
     const newRoundBtn = screen.getByText('🚀 2회차 시작');
     expect(newRoundBtn).toBeInTheDocument();
 
     fireEvent.click(newRoundBtn);
     expect(screen.getByText('2회차')).toBeInTheDocument();
+    // 새 회차는 저장소에 쓴다.
+    await waitFor(async () =>
+      expect((await store.area!.get(['nf:checklist:12345']))['nf:checklist:12345']).toMatchObject({ currentActiveRound: 2 })
+    );
   });
 
-  it('triggers reset study progress when clicking reset button and confirming', () => {
+  it('triggers reset study progress when clicking reset button and confirming', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(
@@ -161,6 +172,7 @@ describe('StudyPanel Main Component', () => {
       />
     );
 
+    await screen.findByText('1회차');
     const settingsBtn = screen.getByTitle('학습 환경 설정');
     fireEvent.click(settingsBtn);
 
@@ -182,15 +194,22 @@ describe('StudyPanel Main Component', () => {
       createdAt: 0,
       updatedAt: 0,
     };
+    const storedMemo = netflixMemo({
+      id: 'a1',
+      sourceId: '12345',
+      contextText: 'Sentence Two',
+      start: 9,
+      end: 12,
+      quote: 'Two',
+      sentenceStartMs: 3000,
+      videoTitle: undefined,
+    });
     let area: ReturnType<typeof createMemoryArea>;
 
-    beforeEach(() => {
-      localStorage.setItem('NF_isEnglishVisible', 'true');
-      area = createMemoryArea();
+    beforeEach(async () => {
+      area = createMemoryArea({ 'nf:settings': { isEnglishVisible: true } });
       setStoreClient(createDirectClient(area));
     });
-
-    afterEach(() => setStoreClient(null));
 
     const renderPanel = () =>
       render(
@@ -204,9 +223,21 @@ describe('StudyPanel Main Component', () => {
         />
       );
 
-    it('copies legacy memos, edits them in the shared store, and leaves the original untouched', async () => {
-      const original = JSON.stringify([legacyMemo]);
-      localStorage.setItem('NF_annotations_12345', original);
+    it('4.7-3 removes old memos from the Netflix localStorage without copying them to the store', async () => {
+      localStorage.setItem('NF_annotations_12345', JSON.stringify([legacyMemo]));
+      // 넷플릭스 화면이 열릴 때(index.tsx) 하는 정리
+      removeLegacyStudyKeys();
+
+      const { container } = renderPanel();
+      await screen.findByText('1회차');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(localStorage.getItem('NF_annotations_12345')).toBeNull();
+      expect(container.querySelector('mark')).toBeNull();
+      expect(await listMemos(area)).toEqual([]);
+    });
+
+    it('edits a stored memo in the shared store', async () => {
+      await putMemo(area, storedMemo);
 
       const { container } = renderPanel();
       await waitFor(() => expect(container.querySelector('mark')).not.toBeNull());
@@ -220,11 +251,11 @@ describe('StudyPanel Main Component', () => {
         expect((await getMemo(area, 'a1'))?.note).toBe('number two\nsecond line')
       );
       expect((await getMemo(area, 'a1'))?.videoTitle).toBeUndefined();
-      expect(localStorage.getItem('NF_annotations_12345')).toBe(original);
     });
 
     it('saves new memos with the video title', async () => {
       const { container } = renderPanel();
+      await screen.findByText('1회차');
       const textElement = container.querySelectorAll('.sentence-text')[0];
       const range = document.createRange();
       range.setStart(textElement.firstChild!, 0);
@@ -249,6 +280,7 @@ describe('StudyPanel Main Component', () => {
       let releaseList: (() => void) | undefined;
       const direct = createDirectClient(area);
       setStoreClient({
+        subscribe: direct.subscribe,
         async call<T>(call: any): Promise<T> {
           // 목록은 새 메모를 저장하기 전에 읽어 두고, 새 메모를 만든 뒤에 돌려준다.
           const result = direct.call<T>(call);
@@ -258,7 +290,7 @@ describe('StudyPanel Main Component', () => {
           return result;
         },
       });
-      localStorage.setItem('NF_annotations_12345', JSON.stringify([legacyMemo]));
+      await putMemo(area, storedMemo);
 
       const { container } = renderPanel();
       // 저장된 메모 목록을 읽기 시작한 뒤, 돌려주기 전에 새 메모를 만든다.
@@ -303,9 +335,10 @@ describe('StudyPanel Main Component', () => {
 
     it('keeps memos after resetting progress or changing lines per page', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
-      localStorage.setItem('NF_annotations_12345', JSON.stringify([legacyMemo]));
+      await putMemo(area, storedMemo);
       const { container } = renderPanel();
       await waitFor(() => expect(container.querySelector('mark')).not.toBeNull());
+      await screen.findByText('1회차');
 
       fireEvent.click(screen.getByTitle('학습 환경 설정'));
       fireEvent.click(screen.getByText('현재 영상 학습 초기화'));

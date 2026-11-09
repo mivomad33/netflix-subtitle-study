@@ -1,0 +1,70 @@
+rules_version = '2';
+
+// 사용자마다 자기 영역(users/{uid})만 읽고 쓴다. 나머지는 모두 거부한다(기본 거부).
+// 문서 구조는 src/shared/storage/firestoreLayout.ts. 규칙은 문서의 바이트 크기를 잴 수 없어서
+// 필드 수, 맵 항목 수, 목록 길이, 문자열 길이에 상한을 둔다(4.5-2). 사용자별 합계 20MB는 앱이 막는다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function str(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    function entriesUpTo(e, max) {
+      return e is map && e.size() <= max;
+    }
+
+    function validBook(e) {
+      return e.keys().hasOnly(['m'])
+        && e.m is map
+        && e.m.keys().size() <= 10
+        && str(e.m.id, 1000)
+        && str(e.m.title, 2000)
+        && str(e.m.author, 2000)
+        && e.m.chapters is list
+        && e.m.chapters.size() <= 3000;
+    }
+
+    function validSettings(e) {
+      return e.keys().hasOnly(['reader', 'netflix'])
+        && (!('reader' in e) || entriesUpTo(e.reader, 20))
+        && (!('netflix' in e) || entriesUpTo(e.netflix, 30));
+    }
+
+    function validKv(docId, d) {
+      return d.keys().hasOnly(['e']) && d.e is map && (
+        (docId.matches('memos-([0-9]|[12][0-9]|3[01])') && d.e.size() <= 5000)
+        || ((docId.matches('book-.+') && docId.size() <= 1500) && validBook(d.e))
+        || (docId.matches('done-[0-7]') && d.e.size() <= 20000)
+        || (docId == 'positions' && d.e.size() <= 5000)
+        || (docId == 'settings' && validSettings(d.e))
+        || (docId == 'chsizes' && d.e.size() <= 20000)
+        || (docId == 'nf-checklists' && d.e.size() <= 5000)
+        || (docId == 'nf-pages' && d.e.size() <= 5000)
+        || (docId == 'nf-studied' && d.e.size() <= 5000)
+        || ((docId.matches('nfu-.+') && docId.size() <= 1500) && d.e.keys().hasOnly(['ids']) && d.e.ids is list && d.e.ids.size() <= 5000)
+      );
+    }
+
+    function validChunk(d) {
+      return d.keys().hasOnly(['t', 'i', 'n', 'v'])
+        && str(d.t, 300000)
+        && d.n is int && d.n >= 1 && d.n <= 100
+        && d.i is int && d.i >= 0 && d.i < d.n
+        && str(d.v, 100);
+    }
+
+    match /users/{uid}/kv/{docId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validKv(docId, request.resource.data);
+    }
+
+    match /users/{uid}/ch/{docId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validChunk(request.resource.data);
+    }
+  }
+}

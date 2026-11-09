@@ -10,7 +10,6 @@ import StudyChecklist from './StudyChecklist';
 import { VideoOverlaySubtitle } from './VideoOverlaySubtitle';
 import {
   VideoMetadata,
-  MultiRoundChecklists,
   PageChecklist,
 } from '../../types';
 import { useNetflixPlayer } from './hooks/useNetflixPlayer';
@@ -22,8 +21,9 @@ import { RoundSelector } from './components/RoundSelector';
 import { copyStudyPrompt, copySpeakingPrompt } from './utils/promptTemplates';
 import { registerVideoMetadata } from './utils/dashboardHelper';
 import { togglePanelVisibility } from './utils/layoutManager';
-import { STORAGE_KEYS } from './constants/storageKeys';
-import { migrateChecklists } from './utils/checklistMigrator';
+import { useVideoProgress } from './hooks/useVideoProgress';
+import { settingSetter, useNetflixSettings, useStudyAuth } from './utils/studyStore';
+import { LoginNotice, StorageErrorNotice, WaitingNotice } from './components/StudyNotices';
 
 interface StudyPanelProps {
   sentences: {
@@ -51,55 +51,38 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
   const [visibleTranslations, setVisibleTranslations] = useState<Set<number>>(
     new Set()
   );
-  const [isEnglishVisible, setIsEnglishVisible] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IS_ENGLISH_VISIBLE);
-    return saved !== null ? saved === 'true' : false;
-  });
-  const [isAllVisible, setIsAllVisible] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IS_KOREAN_VISIBLE);
-    return saved !== null ? saved === 'true' : false;
-  });
+  // 설정은 한곳(studyStore)에 있다. 로그인했으면 저장되고, 아니면 이 화면에서만 바뀐다.
+  const settings = useNetflixSettings();
+  const auth = useStudyAuth();
+  const {
+    isEnglishVisible,
+    isKoreanVisible: isAllVisible,
+    isAutoPause,
+    isPageEndPause,
+    isAutoSkip,
+    isSmartSkim,
+    isSentenceLoop,
+    fontSize,
+  } = settings;
+  const setIsEnglishVisible = settingSetter('isEnglishVisible');
+  const setIsAllVisible = settingSetter('isKoreanVisible');
+  const setIsAutoPause = settingSetter('isAutoPause');
+  const setIsPageEndPause = settingSetter('isPageEndPause');
+  const setIsAutoSkip = settingSetter('isAutoSkip');
+  const setIsSmartSkim = settingSetter('isSmartSkim');
+  const setIsSentenceLoop = settingSetter('isSentenceLoop');
+  const setFontSize = settingSetter('fontSize');
   const [visibleEnglishSentences, setVisibleEnglishSentences] = useState<
     Set<number>
   >(new Set());
-  const [isAutoPause, setIsAutoPause] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IS_AUTO_PAUSE);
-    return saved !== null ? saved === 'true' : false;
-  });
-  const [isPageEndPause, setIsPageEndPause] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IS_PAGE_END_PAUSE);
-    return saved !== null ? saved === 'true' : true;
-  });
-  const [isAutoSkip, setIsAutoSkip] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IS_AUTO_SKIP);
-    return saved !== null ? saved === 'true' : false;
-  });
-  const [isSmartSkim, setIsSmartSkim] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IS_SMART_SKIM);
-    return saved !== null ? saved === 'true' : false;
-  });
-  const [isSentenceLoop, setIsSentenceLoop] = useState<boolean>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.IS_SENTENCE_LOOP);
-    return saved !== null ? saved === 'true' : false;
-  });
-  const [fontSize, setFontSize] = useState<number>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.FONT_SIZE);
-    return saved !== null ? parseInt(saved, 10) : 14;
-  });
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.FONT_SIZE, fontSize.toString());
-  }, [fontSize]);
-
-  const [checklists, setChecklists] = useState<MultiRoundChecklists>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEYS.CHECKLIST_PREFIX}${videoId}`);
-    const parsed = saved ? JSON.parse(saved) : null;
-    return migrateChecklists(parsed);
-  });
-
-  useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEYS.CHECKLIST_PREFIX}${videoId}`, JSON.stringify(checklists));
-  }, [checklists, videoId]);
+  const {
+    status: progressStatus,
+    checklists,
+    itemsPerPage,
+    updateChecklists: setChecklists,
+    changeItemsPerPage,
+  } = useVideoProgress(videoId);
 
   const [currentSelectedRound, setCurrentSelectedRound] = useState<number>(
     checklists.currentActiveRound
@@ -118,13 +101,13 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
     speaking: false,
   };
 
-  const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEYS.ITEMS_PER_PAGE_PREFIX}${videoId}`);
-    return saved ? parseInt(saved, 10) : 50;
-  });
   const totalTabs = Math.ceil(sentences.length / itemsPerPage);
 
+  // 체크리스트·회차·공부한 영상 목록은 로그인해 다 읽은 뒤에만 쓸 수 있다.
+  const canSaveProgress = progressStatus === 'ready';
+
   const handleToggleChecklist = (key: keyof PageChecklist) => {
+    if (!canSaveProgress) return;
     setChecklists((prev) => {
       const roundData = prev.rounds[currentSelectedRound] || {};
       const pageData = roundData[currentTab] || {
@@ -179,6 +162,7 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
   };
 
   const handleStartNewRound = () => {
+    if (!canSaveProgress) return;
     const nextRound = checklists.currentActiveRound + 1;
     setChecklists((prev) => ({
       ...prev,
@@ -192,17 +176,18 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
   };
 
   const handleResetStudyProgress = () => {
+    if (!canSaveProgress) return;
     if (
       window.confirm(
         '이 영상의 모든 회차 학습 기록을 초기화하시겠습니까?\n(이 작업은 되돌릴 수 없습니다.)'
       )
     ) {
-      setChecklists({
+      setChecklists(() => ({
         currentActiveRound: 1,
         rounds: {
           1: {},
         },
-      });
+      }));
       registerVideoMetadata(videoId, totalTabs);
     }
   };
@@ -400,19 +385,13 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
         `페이지당 대사 수를 ${newValue}개로 변경하시겠습니까?\n변경 시 ${videoTitle}의 체크리스트가 초기화될 수 있습니다.`
       )
     ) {
-      setItemsPerPage(newValue);
-      localStorage.setItem(`${STORAGE_KEYS.ITEMS_PER_PAGE_PREFIX}${videoId}`, newValue.toString());
-      setChecklists({
-        currentActiveRound: 1,
-        rounds: {
-          1: {},
-        },
-      });
-      localStorage.removeItem(`${STORAGE_KEYS.CHECKLIST_PREFIX}${videoId}`);
+      changeItemsPerPage(newValue);
       setCurrentTab(0);
-      
-      const nextTotalTabs = Math.ceil(sentences.length / newValue);
-      registerVideoMetadata(videoId, nextTotalTabs);
+
+      if (canSaveProgress) {
+        const nextTotalTabs = Math.ceil(sentences.length / newValue);
+        registerVideoMetadata(videoId, nextTotalTabs);
+      }
     }
   };
 
@@ -492,8 +471,22 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
             handleItemsPerPageChange={handleItemsPerPageChange}
             settingsRef={settingsRef}
             onResetStudyProgress={handleResetStudyProgress}
+            canSaveProgress={canSaveProgress}
           />
 
+          <div className="study-notice-row">
+            <StorageErrorNotice />
+          </div>
+
+          {progressStatus === 'waiting' || progressStatus === 'out' ? (
+            <div className="study-notice-row">
+              <LoginNotice auth={auth} />
+            </div>
+          ) : progressStatus === 'loading' ? (
+            <div className="study-notice-row">
+              <WaitingNotice text="학습 기록을 불러오는 중…" />
+            </div>
+          ) : (
           <div className="checklist-row-container">
             <RoundSelector
               currentActiveRound={checklists.currentActiveRound}
@@ -510,6 +503,7 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
               onToggleChecklist={handleToggleChecklist}
             />
           </div>
+          )}
 
           <SentenceList
             sentences={sentences}
@@ -531,6 +525,7 @@ const StudyPanel: React.FC<StudyPanelProps> = ({
             onRemoveAnnotation={removeAnnotation}
             onEditAnnotation={handleEditAnnotation}
             saveFailed={saveFailed}
+            canAnnotate={auth === 'in'}
           />
         </div>
       )}

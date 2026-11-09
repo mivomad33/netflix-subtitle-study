@@ -8,7 +8,8 @@ import {
   listMemos,
   putMemo,
 } from '../../../shared/storage/repo';
-import { KEY } from '../../../shared/storage/keys';
+import { KEY, PREFIX } from '../../../shared/storage/keys';
+import { applyMemoChanges, touches } from '../logic/liveMemos';
 import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
@@ -102,6 +103,22 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
       cancelled = true;
     };
   }, [area]);
+
+  // 다른 탭·기기에서 바뀐 메모와 책을 반영한다(4.2-3). 고치는 중인 메모는 그대로 둔다.
+  const editingRef = useRef<string | null>(null);
+  editingRef.current = editingId;
+  useEffect(
+    () =>
+      area.onChanged((changes) => {
+        setMemos((prev) => prev && applyMemoChanges(prev, changes, () => true, editingRef.current));
+        if (touches(changes, [PREFIX.book])) {
+          listBooks(area)
+            .then(setBooks)
+            .catch((e) => console.error('[NF-STUDY] Failed to reload books:', e));
+        }
+      }),
+    [area]
+  );
 
   const booksById = useMemo(() => new Map(books.map((b) => [b.id, b])), [books]);
 

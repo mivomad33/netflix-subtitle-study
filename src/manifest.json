@@ -5,7 +5,8 @@
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3UWwsUmi8APon7LpZkNdIglmgHUqq6YPc6hOnjT9ZJSeOkf0Qst6l/Sw2m9Mq2kJXdXtLZ5bd7IzSPj3bMIisFGRwFkdB5nMDz0I6AoI1GifuzE0Su3rSSO2ws6z8tQDLnH60TVuudLsCRInp5XMDhsFrjwHVS2B/8P0BwJDhz+EhX0Jx7SZRcmom/CfXIT2RdmecdoGDCD1EtnUNcisMHxvapAWc9doaxDk3n3zdlZP2QH5aNwfCtulWNn4Dt0Ulv8b7F6ZuI+NJAuDP2SWB/24fMP6wOm8043kA7ZuEni8ZevU/J0+JfQMFi2zLto3yoAnDKV3T1LcyrRG1nBLUQIDAQAB",
   "permissions": [
     "storage",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "identity"
   ],
   "options_page": "options.html",
   "background": {

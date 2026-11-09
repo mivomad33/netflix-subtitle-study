@@ -22,6 +22,18 @@ jobs:
         run: npm run lint
       - name: Test
         run: npm run test:run
+      # 보안 규칙·Firestore 저장소 통합 테스트. 에뮬레이터(demo- 프로젝트)만 쓰고 비밀 값이 필요 없다.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Cache Firebase emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('package-lock.json') }}
+      - name: Emulator tests
+        run: npm run test:emulator
       - name: Build
         run: npm run build
       - name: Check build

@@ -15,13 +15,20 @@ config.mode = 'production';
 
 var packageInfo = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
 
-config.plugins = (config.plugins || []).concat(
-  new ZipPlugin({
-    filename: `${packageInfo.name}-${packageInfo.version}.zip`,
-    path: path.join(__dirname, '../', 'zip'),
-  })
-);
+// E2E 빌드는 압축 파일을 만들지 않는다.
+if (process.env.NF_E2E !== '1') {
+  config.plugins = (config.plugins || []).concat(
+    new ZipPlugin({
+      filename: `${packageInfo.name}-${packageInfo.version}.zip`,
+      path: path.join(__dirname, '../', 'zip'),
+    })
+  );
+}
 
-webpack(config, function (err) {
+webpack(config, function (err, stats) {
   if (err) throw err;
+  if (stats && stats.hasErrors()) {
+    console.error(stats.toString({ all: false, errors: true }));
+    process.exitCode = 1;
+  }
 });

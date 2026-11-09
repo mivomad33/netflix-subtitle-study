@@ -13,6 +13,10 @@ import { useReaderEnv } from '../env';
 import { Route } from '../route';
 import { BookProgress, bookProgress, continueLabel } from '../logic/progress';
 import { ProgressBar } from './ProgressBar';
+import { touches } from '../logic/liveMemos';
+import { PREFIX } from '../../../shared/storage/keys';
+
+const LIST_PREFIXES = [PREFIX.book, PREFIX.memo, PREFIX.position, PREFIX.completion, PREFIX.chapter];
 
 interface Row {
   book: BookMeta;
@@ -55,6 +59,17 @@ export const BookList: React.FC<{ navigate: (route: Route) => void }> = ({ navig
 
   useEffect(() => {
     load();
+    // 다른 탭·기기에서 책·메모·위치·학습 완료가 바뀌면 다시 읽는다(4.2-3). 여러 변경이 한꺼번에 오면 한 번만 읽는다.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = area.onChanged((changes) => {
+      if (!touches(changes, LIST_PREFIXES)) return;
+      clearTimeout(timer);
+      timer = setTimeout(load, 200);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [area]);
 
