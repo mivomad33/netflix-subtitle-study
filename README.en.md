@@ -74,8 +74,8 @@ It uses the browser's built-in voices (Web Speech API), so it is free and needs 
 - **End of chapter**: Reading stops at the end of a chapter and offers **다음 장 읽기** (read next chapter).
 - **Read a selection**: Select text and click **읽기** (read) in the highlight toolbar to hear only that text.
 - **Shadowing**: **문장 반복** repeats the current sentence until you turn it off, and **문장마다 멈춤** stops after each sentence. After repeating it yourself, press play or `D` for the next sentence.
-- **Voices**: Only good-sounding English device voices are listed. Chrome's natural voices kept on the device (such as "Google US English 1 (Natural)") come first, then macOS high-quality voices (names ending in Premium or Enhanced). Only when none of these exist are the plain device voices (such as Samantha) shown, with a note. Novelty voices (Bubbles, Zarvox and the like) are never listed. Rate, voice, repeat, and pause settings are remembered. If the chosen voice is not available, the first listed voice reads instead.
-- **Text stays on your computer**: Only device voices are used. Online voices (such as Chrome's "Google US English", which sends the text to Google's servers) are not used.
+- **Voices**: Only English voices are listed. Natural voices and macOS high-quality voices (Premium, Enhanced) come first; if there are none, plain device voices are shown. Your voice and reading settings are remembered.
+- **Online voices**: Voices marked "(온라인)" (online), such as Chrome's "Google US English", are at the end of the list. If you choose one, **the text being read is sent to Google's servers.** Otherwise a device voice reads.
 - **Getting better English voices (macOS)**: In System Settings › Accessibility › Spoken Content, pick or download an English voice from the **System Voice** menu (voices with a download icon are downloaded from Apple over the internet). Reopen Chrome afterward. When no English device voice is available, the reading bar shows this guidance instead.
 
 ## Sign-in and data

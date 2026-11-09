@@ -1,4 +1,5 @@
-// 음성 고르기. 기기 음성(localService) 중 듣기 좋은 영어 음성만 쓴다. 온라인 음성은 글을 외부로 보내므로 쓰지 않는다.
+// 음성 고르기. 기기 음성(localService) 중 듣기 좋은 영어 음성을 먼저, 온라인 영어 음성을 그 뒤에 보인다.
+// 온라인 음성은 읽는 글을 외부(Google 등)로 보내므로 "(온라인)"을 붙이고, 고르지 않으면 쓰지 않는다.
 export interface VoiceLike {
   voiceURI: string;
   name: string;
@@ -21,24 +22,22 @@ const ODD_VOICE =
 const tier = (v: VoiceLike) => (isNatural(v) ? 0 : isPremium(v) ? 1 : 2);
 
 // 목록에 보일 음성: 영어 기기 음성 중 Natural → Premium·Enhanced. 그런 음성이 하나도 없을 때만
-// 어색한 음성을 뺀 기본 기기 음성을 보이고 basicOnly로 알린다.
+// 어색한 음성을 뺀 기본 기기 음성을 보이고 basicOnly로 알린다. 그 뒤에 온라인 영어 음성을 붙인다.
 export function usableVoices<V extends VoiceLike>(all: V[]): { voices: V[]; basicOnly: boolean } {
   const device = all.filter((v) => v.localService && isEnglishVoice(v));
   const good = device.filter((v) => tier(v) < 2);
   const voices = good.length > 0 ? good : device.filter((v) => !ODD_VOICE.test(v.name));
-  const sorted = [...voices].sort(
-    (a, b) =>
-      tier(a) - tier(b) ||
-      Number(isUsEnglish(b)) - Number(isUsEnglish(a)) ||
-      a.name.localeCompare(b.name, 'en', { numeric: true })
-  );
-  return { voices: sorted, basicOnly: good.length === 0 && sorted.length > 0 };
+  const byName = (a: V, b: V) =>
+    Number(isUsEnglish(b)) - Number(isUsEnglish(a)) || a.name.localeCompare(b.name, 'en', { numeric: true });
+  const sorted = [...voices].sort((a, b) => tier(a) - tier(b) || byName(a, b));
+  const online = all.filter((v) => !v.localService && isEnglishVoice(v)).sort(byName);
+  return { voices: [...sorted, ...online], basicOnly: good.length === 0 && sorted.length > 0 };
 }
 
-// 저장한 음성이 목록에 있으면 그것, 아니면 목록의 첫 음성.
+// 저장한 음성이 목록에 있으면 그것, 아니면 목록의 첫 음성(기기 음성이 있으면 기기 음성).
 export function pickVoice<V extends VoiceLike>(all: V[], savedURI: string | undefined): V | null {
   const { voices } = usableVoices(all);
   return (savedURI ? voices.find((v) => v.voiceURI === savedURI) : undefined) ?? voices[0] ?? null;
 }
 
-export const voiceLabel = (v: VoiceLike) => `${v.name} (${v.lang})`;
+export const voiceLabel = (v: VoiceLike) => `${v.name} (${v.lang})${v.localService ? '' : ' (온라인)'}`;

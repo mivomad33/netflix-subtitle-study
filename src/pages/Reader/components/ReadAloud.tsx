@@ -57,7 +57,7 @@ export function useReadAloud(
   }, [speech]);
 
   const { voices, basicOnly } = useMemo(() => usableVoices(allVoices), [allVoices]);
-  // 발화마다 이 값을 쓴다. 기기 음성만 나온다(온라인 음성은 쓰지 않는다).
+  // 발화마다 이 값을 쓴다. 온라인 음성은 사용자가 고른 경우에만 나온다.
   const voice = useMemo(() => pickVoice(allVoices, settings.voiceURI), [allVoices, settings.voiceURI]);
   const voiceRef = useRef(voice);
   voiceRef.current = voice;

@@ -34,7 +34,7 @@ describe('voices', () => {
     expect(isEnglishVoice(v('x', 'ko-KR'))).toBe(false);
   });
 
-  it('lists only good device voices: Natural first, then Premium and Enhanced, US English first, then by name', () => {
+  it('lists good device voices (Natural, then Premium and Enhanced, US English first, then by name), then online English voices', () => {
     const all = [KOREAN, ...ONLINE, ...ODD, ...BASIC, ENHANCED, NATURAL_GB, PREMIUM, NATURAL_US_2, NATURAL_US_1];
     expect(names(usableVoices(all).voices)).toEqual([
       'Google US English 1 (Natural)',
@@ -42,40 +42,46 @@ describe('voices', () => {
       'Google UK English 1 (Natural)',
       'Ava (Premium)',
       'Serena (Enhanced)',
+      'Google US English',
+      'Google UK English Female',
     ]);
     expect(usableVoices(all).basicOnly).toBe(false);
   });
 
-  it('never lists online voices, even ones with a natural name', () => {
-    const onlineNatural = v('Google US English 3 (Natural)', 'en-US', false);
-    expect(names(usableVoices([...ONLINE, onlineNatural, NATURAL_US_1]).voices)).toEqual([
+  it('lists online English voices after device voices, but not online voices in other languages', () => {
+    const onlineKorean = v('Google 한국의', 'ko-KR', false);
+    expect(names(usableVoices([...ONLINE, onlineKorean, NATURAL_US_1]).voices)).toEqual([
       'Google US English 1 (Natural)',
+      'Google US English',
+      'Google UK English Female',
     ]);
-    expect(usableVoices(ONLINE).voices).toEqual([]);
+    expect(names(usableVoices(ONLINE).voices)).toEqual(['Google US English', 'Google UK English Female']);
   });
 
   it('falls back to plain device voices without novelty ones when no good voice exists', () => {
     const result = usableVoices([KOREAN, ...ONLINE, ...ODD, ...BASIC]);
-    expect(names(result.voices)).toEqual(['Samantha', 'Daniel']);
+    expect(names(result.voices)).toEqual(['Samantha', 'Daniel', 'Google US English', 'Google UK English Female']);
     expect(result.basicOnly).toBe(true);
     expect(usableVoices([...ODD]).voices).toEqual([]);
   });
 
-  it('labels voices with their language', () => {
+  it('labels voices with their language, and online voices as online', () => {
     expect(voiceLabel(NATURAL_US_1)).toBe('Google US English 1 (Natural) (en-US)');
+    expect(voiceLabel(ONLINE[0])).toBe('Google US English (en-US) (온라인)');
   });
 
   it('4.3-6 uses the saved voice when it is listed, otherwise the first listed voice', () => {
     const all = [...BASIC, NATURAL_US_1, NATURAL_US_2];
     expect(pickVoice(all, 'Google US English 2 (Natural)')?.voiceURI).toBe('Google US English 2 (Natural)');
     expect(pickVoice(all, 'Gone')?.voiceURI).toBe('Google US English 1 (Natural)');
-    // 좋은 음성이 있으면 저장한 기본 음성이나 온라인 음성은 쓰지 않는다.
+    // 좋은 음성이 있으면 저장한 기본 음성은 쓰지 않는다. 고른 온라인 음성은 쓰고, 고르지 않았으면 기기 음성이 먼저다.
     expect(pickVoice(all, 'Samantha')?.voiceURI).toBe('Google US English 1 (Natural)');
-    expect(pickVoice([...ONLINE, ...BASIC], 'Google US English')?.voiceURI).toBe('Samantha');
+    expect(pickVoice([...ONLINE, ...BASIC], 'Google US English')?.voiceURI).toBe('Google US English');
+    expect(pickVoice([...ONLINE, ...BASIC], undefined)?.voiceURI).toBe('Samantha');
   });
 
   it('4.3-7 finds nothing when no usable English voice exists', () => {
     expect(pickVoice([KOREAN], undefined)).toBeNull();
-    expect(pickVoice([...ONLINE], undefined)).toBeNull();
+    expect(pickVoice([v('Google 한국의', 'ko-KR', false)], undefined)).toBeNull();
   });
 });

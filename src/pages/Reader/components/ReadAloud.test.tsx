@@ -226,10 +226,10 @@ describe('4.3-6 rate and voice', () => {
 });
 
 describe('4.3-7 voices that cannot be used', () => {
-  it('lists only English voices', async () => {
+  it('lists only English voices, online ones last and marked', async () => {
     await setup();
     const options = within(screen.getByLabelText('음성')).getAllByRole('option').map((o) => o.textContent);
-    expect(options).toEqual(['Fake Samantha (en-US)', 'Fake Daniel (en-GB)']);
+    expect(options).toEqual(['Fake Samantha (en-US)', 'Fake Daniel (en-GB)', 'Fake Online English (en-US) (온라인)']);
   });
 
   it.each([
@@ -355,29 +355,39 @@ describe('4.3-10 shadowing', () => {
   });
 });
 
-describe('good device voices only', () => {
+describe('good device voices first, then online English voices', () => {
   const NATURAL = fakeVoice('Fake US English 1 (Natural)', 'en-US');
   const NATURAL_2 = fakeVoice('Fake US English 2 (Natural)', 'en-US');
   const ODD = fakeVoice('Bubbles', 'en-US');
   const names = () => within(screen.getByLabelText('음성')).getAllByRole('option').map((o) => o.textContent);
 
-  it('lists only natural voices when they exist, without a settings switch for online voices', async () => {
+  it('lists natural voices when they exist, then online voices, without a settings switch for online voices', async () => {
     await setup({ voices: [...VOICES, ODD, NATURAL_2, NATURAL] });
-    expect(names()).toEqual(['Fake US English 1 (Natural) (en-US)', 'Fake US English 2 (Natural) (en-US)']);
+    expect(names()).toEqual([
+      'Fake US English 1 (Natural) (en-US)',
+      'Fake US English 2 (Natural) (en-US)',
+      'Fake Online English (en-US) (온라인)',
+    ]);
     expect(screen.queryByRole('button', { name: '읽기 설정' })).toBeNull();
     expect(screen.queryByText(BASIC_VOICES_NOTICE)).toBeNull();
   });
 
   it('shows plain device voices with a notice when no good voice exists', async () => {
     await setup({ voices: [...VOICES, ODD] });
-    expect(names()).toEqual(['Fake Samantha (en-US)', 'Fake Daniel (en-GB)']);
+    expect(names()).toEqual(['Fake Samantha (en-US)', 'Fake Daniel (en-GB)', 'Fake Online English (en-US) (온라인)']);
     expect(screen.getByText(BASIC_VOICES_NOTICE)).toBeInTheDocument();
   });
 
-  it('never speaks with an online voice, even when an old setting allowed it, on every path', async () => {
+  it('reads with a device voice unless an online voice was chosen', async () => {
+    const { fake } = await setup({ voices: [...VOICES, NATURAL] });
+    play();
+    expect(fake.spoken.map((s) => s.voiceURI)).toEqual([NATURAL.voiceURI]);
+  });
+
+  it('reads with the chosen online voice on every path', async () => {
     const { fake, view } = await setup({
       voices: [...VOICES, NATURAL],
-      prepare: (area) => updateReaderSettings(area, { voiceURI: ONLINE.voiceURI, allowOnlineVoices: true }),
+      prepare: (area) => updateReaderSettings(area, { voiceURI: ONLINE.voiceURI }),
     });
     play(); // 재생
     fireEvent.keyDown(window, { code: 'KeyD', key: 'd' }); // 단축키
@@ -391,6 +401,6 @@ describe('good device voices only', () => {
     fireEvent.mouseUp(view.container.querySelector('[data-paragraph-index="0"] p.annotatable')!);
     fireEvent.click(screen.getByRole('button', { name: '읽기' })); // 고른 글 읽기
     expect(fake.spoken.length).toBe(5);
-    expect(fake.spoken.map((s) => s.voiceURI)).toEqual(Array(5).fill(NATURAL.voiceURI));
+    expect(fake.spoken.map((s) => s.voiceURI)).toEqual(Array(5).fill(ONLINE.voiceURI));
   });
 });

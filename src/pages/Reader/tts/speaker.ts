@@ -36,7 +36,7 @@ export interface SpeakerOptions {
   rate: number;
   repeat: boolean;
   autoPause: boolean;
-  // 발화마다 부른다. 기기 음성만 돌려줘야 한다(온라인 음성은 쓰지 않는다).
+  // 발화마다 부른다. 온라인 음성은 사용자가 고른 경우에만 돌려준다.
   getVoice: () => VoiceLike | null;
 }
 

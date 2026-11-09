@@ -24,8 +24,8 @@ With the dev server running, open `http://localhost:3000/reader-dev.html` to see
 - `?seed=perf`: Fills in 20 books (one of them 2,000,000 characters) and 5,000 notes.
 - In the browser console, `window.nfStudyDev` provides `reset()`, `seedDemo()`, and `seedPerf()`.
 - Read aloud uses silent fake voices ([fakeSpeech.ts](src/pages/Reader/dev/fakeSpeech.ts)) by default. They send start and end signals timed by text length, so you can see the current-sentence highlight and auto scroll. Pick a voice set with `?voices=`; the choice is kept across reloads.
-  - `device` (default): two Natural voices, one Premium voice, and the `basic` voices (only the first three are listed)
-  - `basic`: two plain device voices, a novelty voice (Bubbles), a Korean voice, and an online English voice (the two plain voices are listed with a note)
+  - `device` (default): two Natural voices, one Premium voice, and the `basic` voices (the first three and the online English voice are listed)
+  - `basic`: two plain device voices, a novelty voice (Bubbles), a Korean voice, and an online English voice (the two plain voices and the online English voice are listed, with a note)
   - `none`: no voices (shows the no-English-voice notice)
   - `unsupported`: like a browser without `speechSynthesis`
   - `real`: this browser's real voices
