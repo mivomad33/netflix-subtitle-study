@@ -57,7 +57,7 @@
 | 4.11-3 개발 화면·표시 검사 | 만족 | `reader-dev.html`은 메모리 저장소와 가짜 로그인(`fakeAuth.ts`), 넷플릭스 패널 개발 화면 `netflix-dev.html`(`?auth=out\|wait`, `?error=`). `check:build`의 개발 표시에 `NF_STUDY_DEV_FAKE_AUTH`, `NF_STUDY_E2E_EMULATOR_LOGIN`, 에뮬레이터 연결 문구를 더하고 그 표시를 넣은 번들로 실패하는 테스트(`check-build.test.ts` 4.11-3). 일반 빌드 ok |
 | 4.12-1 README·DEVELOPMENT | 만족 | README·DEVELOPMENT 두 언어에 로그인, Firestore 구조, 20MB·무료 한도, 탈퇴, 옛 로컬 데이터 지우기와 업데이트 전 백업 안내, 방침 링크, `identity` 권한, 설정 파일(`apps:sdkconfig ... --out firebase.config.local.json`, 자기 Firebase 프로젝트로 빌드하기 8단계), 에뮬레이터·E2E 테스트(Java 21 PATH), 배포. 두 언어 대조: 절 구성과 줄 수가 같고(README 226줄, DEVELOPMENT 246줄씩) 절마다 문장을 맞춰 봄(서브에이전트 대조 뒤 메인이 로그인 절을 읽어 확인) |
 | 4.12-2 design.md | 만족 | `docs/design.md` 5장 "계정과 저장 안내"에 로그인 화면, 대기 표시, 계정 표시, 확인 대화상자, 저장 오류 안내, 넷플릭스 패널의 안내를 더함. `design-check`가 이 기준으로 본다 |
-| 완료: 전체 검사 통과 | 만족 | `552c300`에서 typecheck, lint, `test:run` 421개, `test:emulator` 39개, build, check:build, `test:e2e` 3개 통과 |
+| 완료: 전체 검사 통과 | 만족 | `27b9554`에서 typecheck, lint, `test:run` 427개, `test:emulator` 40개, build, check:build, `test:e2e` 3개 통과 |
 | 완료: 마지막 커밋 CI 성공 | 만족 | `552c300` CI 성공. 보고서 커밋의 CI는 report.md 참고 |
 | 완료: 규칙 배포·Hosting·OAuth | 만족 | 4.5-3, 4.8-3, 4.8-5 |
 | 완료: 실제 확장 프로그램 로그인 전 화면 | 만족 | E2E "real build signed-out screen"(로그인 버튼과 방침 링크 두 개 보임), [screens/reader-signed-out-1280.png](screens/reader-signed-out-1280.png) |
@@ -89,6 +89,9 @@
 - Firebase(Auth·Firestore)는 서비스 워커 한곳에서만 돈다. 확장 화면과 content script는 `chrome.runtime` 포트로 서비스 워커에 부탁한다. 이유: Firestore 인스턴스가 하나라 로그아웃 때 `terminate` 뒤 `clearIndexedDbPersistence`가 다른 탭에 막히지 않고(4.1-4), 로그인 상태를 나눌 필요가 없다. 넷플릭스 포트는 넷플릭스 작업만 받도록 서비스 워커가 검사한다.
 - Firestore 구조: `users/{uid}/kv/{문서}`에 작은 데이터를 묶어 두고(필드 `e`), 본문은 `users/{uid}/ch/{책}~{장}~{n}` 조각(필드 `t`)으로 둔다. 메모는 id 해시로 32개 문서에 나눈다. 서비스 워커가 `kv` 전체를 한 번 구독해 거울을 두고, 본문은 열 때만 읽는다(4.2-7).
 
+- (사용자 지적, 2026-11-09) 확인을 마친 뒤 제안 중 고칠 것을 골라 달라고 해 세 가지를 골라 `27b9554`에서 고쳤다: 메모 글 400ms 묶어 저장(편집을 닫거나 화면을 떠나면 바로), 위치 못 찾은 메모 목록을 `kv/nf-unplaced` 한 문서로(규칙 다시 배포), 공부한 영상 기록은 시각만 10분 안으로 바뀌면 다시 쓰지 않음(대시보드 최근순 때문에 아예 건너뛰지는 않음). 새 테스트는 모두 고치기 전 실패를 봤다. 원서 리더는 같은 훅(`useMemoSaver`)을 쓰고 따로 테스트를 더하지 않았다.
+- (사용자 지시, 2026-11-09) 머지와 push를 맡겨 `review-done` 없이 main에 머지하고 목록 상태를 '완료'로 바꿨다.
+
 ## 보류
 
 없음.
@@ -101,5 +104,7 @@
 
 - [명세서] 4.8-5: 브랜딩 저장에 "개발자 연락처 이메일"이 필수였다. 명세서에 없어 프로젝트 소유 계정 `hunt24333@gmail.com`을 넣었다(Google에만 보이는 값).
 - [프로세스] Claude in Chrome에서 좌표 클릭 뒤 입력이 입력칸 밖으로 가 콘솔 단축키가 눌려 다른 화면으로 넘어갔다(저장 전이라 바뀐 것 없음). 요소 참조(ref)로 다시 했다.
+
+- [프로세스] `test:e2e`도 에뮬레이터를 띄우므로 Java가 PATH에 있어야 한다. 처음엔 빠뜨려 실패했다.
 
 결과 보고서: [report.md](report.md)
