@@ -187,3 +187,4 @@
 - [명세서] 4.8-5: 브랜딩 저장에 "개발자 연락처 이메일"이 필수였다. 명세서에 없어 프로젝트 소유 계정 `hunt24333@gmail.com`을 넣었다(Google에만 보이는 값).
 - [프로세스] Claude in Chrome에서 좌표 클릭 뒤 입력이 입력칸 밖으로 가 콘솔 단축키가 눌려 다른 화면으로 넘어갔다(저장 전이라 바뀐 것 없음). 요소 참조(ref)로 다시 했다.
 - [프로세스] `test:e2e`도 에뮬레이터를 띄우므로 Java가 PATH에 있어야 한다(`PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH`). 처음엔 빠뜨려 "Unable to locate a Java Runtime"으로 실패했다.
+- [프로세스] `7cbfc39`의 CI에서 기존 에뮬레이터 테스트 "passes a write that ends just under the limit…"가 한 번 실패했다(메모를 지운 뒤 다시 쓴 메모를 바로 읽으니 없음). 로컬 5회와 CI 재실행은 통과했다. 쓰기가 끝난 직후 구독 사본이 아직 바뀌지 않는 드문 순서로 보이며, 원인을 확정하지 못해 고치지 않았다(제안: 쓰기가 끝나면 사본에 바로 반영하기).
