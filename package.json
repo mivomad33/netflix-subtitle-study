@@ -12,7 +12,9 @@
     "test": "vitest",
     "test:run": "vitest run",
     "check:build": "node scripts/check-build.mjs",
-    "test:emulator": "firebase emulators:exec --only auth,firestore --project demo-nf-study \"vitest run -c vitest.emulator.config.ts\""
+    "test:emulator": "firebase emulators:exec --only auth,firestore --project demo-nf-study \"vitest run -c vitest.emulator.config.ts\"",
+    "build:e2e": "NF_E2E=1 node utils/build.js",
+    "test:e2e": "npm run build && npm run build:e2e && firebase emulators:exec --only auth,firestore --project demo-nf-study \"vitest run -c vitest.e2e.config.ts\""
   },
   "dependencies": {
     "firebase": "^13.2.0",

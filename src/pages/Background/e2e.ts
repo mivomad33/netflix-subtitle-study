@@ -16,11 +16,19 @@ cleanupOldLocalData(chrome.storage.local as never).catch(() => {});
 const backend = createBackend({
   config: FIREBASE_CONFIG!,
   emulator: {
-    auth: (auth) => connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true }),
+    auth: (auth) =>
+      connectAuthEmulator(auth, 'http://127.0.0.1:9099', {
+        disableWarnings: true,
+      }),
     db: (db) => connectFirestoreEmulator(db, '127.0.0.1', 8080),
   },
   // 에뮬레이터는 서명하지 않은 가짜 ID 토큰을 받는다.
-  getIdToken: async () => JSON.stringify({ sub: account.sub, email: account.email, email_verified: true }),
+  getIdToken: async () =>
+    JSON.stringify({
+      sub: account.sub,
+      email: account.email,
+      email_verified: true,
+    }),
 });
 
 (globalThis as unknown as { nfStudyE2E: unknown }).nfStudyE2E = {
@@ -29,6 +37,12 @@ const backend = createBackend({
     account = { sub, email };
   },
   state: () => backend.state(),
+  // 테스트가 로그인한 사용자의 저장소에 바로 쓴다.
+  async write(items: Record<string, unknown>) {
+    const area = backend.area();
+    if (!area) throw new Error('not signed in');
+    await area.set(items);
+  },
 };
 
 serveChromePorts(backend);
