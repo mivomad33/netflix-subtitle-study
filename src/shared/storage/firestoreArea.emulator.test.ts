@@ -118,6 +118,23 @@ describe('4.2-1 many Netflix checklists', () => {
   }, 60000);
 });
 
+describe('4.2-7 unplaced memo lists', () => {
+  // 영상마다 문서를 만들면 화면을 열 때 읽는 문서 수가 영상 수만큼 는다. 한 문서에 모은다.
+  it('keeps the lists of many videos in one kv document', async () => {
+    const { client, area } = await open('unplaced-user');
+    await area.set({ [KEY.netflixUnplaced('v1')]: ['a'], [KEY.netflixUnplaced('v2')]: ['b', 'c'] });
+    await area.set({ [KEY.netflixUnplaced('v/3')]: [] });
+    const kvDocs = await getDocs(collection(client.db, 'users', client.uid, 'kv'));
+    expect(kvDocs.docs.map((d) => d.id)).toEqual(['nf-unplaced']);
+    const other = await open('unplaced-user');
+    expect(await other.area.get([KEY.netflixUnplaced('v1'), KEY.netflixUnplaced('v2'), KEY.netflixUnplaced('v/3')])).toEqual({
+      [KEY.netflixUnplaced('v1')]: ['a'],
+      [KEY.netflixUnplaced('v2')]: ['b', 'c'],
+      [KEY.netflixUnplaced('v/3')]: [],
+    });
+  });
+});
+
 describe('4.2-3 changes reach another open client within 10 seconds', () => {
   it('notifies the other client and the later write wins', async () => {
     const a = await open('shared');

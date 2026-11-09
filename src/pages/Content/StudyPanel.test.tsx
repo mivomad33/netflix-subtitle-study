@@ -253,6 +253,22 @@ describe('StudyPanel Main Component', () => {
       expect((await getMemo(area, 'a1'))?.videoTitle).toBeUndefined();
     });
 
+    it('saves a memo being typed once after typing pauses, not on every keystroke', async () => {
+      await putMemo(area, storedMemo);
+      const { container } = renderPanel();
+      await waitFor(() => expect(container.querySelector('mark')).not.toBeNull());
+      const memoWrites = vi.spyOn(area, 'set');
+
+      fireEvent.click(container.querySelector('mark')!);
+      for (const text of ['n', 'no', 'not', 'note']) {
+        fireEvent.change(screen.getByLabelText('메모'), { target: { value: text } });
+      }
+      await waitFor(async () => expect((await getMemo(area, 'a1'))?.note).toBe('note'));
+      await new Promise((r) => setTimeout(r, 600));
+      const memoCalls = memoWrites.mock.calls.filter(([items]) => Object.keys(items).some((k) => k.startsWith('memo:')));
+      expect(memoCalls).toHaveLength(1);
+    });
+
     it('saves new memos with the video title', async () => {
       const { container } = renderPanel();
       await screen.findByText('1회차');

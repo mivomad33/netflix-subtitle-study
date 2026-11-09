@@ -83,6 +83,23 @@ describe('MemoCollection', () => {
     expect(screen.getAllByText('boils water for tea').length).toBeGreaterThan(0);
   });
 
+  it('고치는 메모 글은 글자마다가 아니라 입력이 멈춘 뒤 한 번 저장한다', async () => {
+    const area = createMemoryArea();
+    await seedBook(area);
+    await putMemo(area, bookMemo({ sourceId: 'bk1', note: '' }));
+    renderCollection(area);
+    const memoWrites = vi.spyOn(area, 'set');
+
+    fireEvent.click(await screen.findByRole('button', { name: '메모 고치기' }));
+    const textarea = await screen.findByLabelText('메모');
+    for (const text of ['b', 'bo', 'boi', 'boil']) fireEvent.change(textarea, { target: { value: text } });
+
+    await waitFor(async () => expect((await getMemo(area, 'b1'))?.note).toBe('boil'));
+    await new Promise((r) => setTimeout(r, 600));
+    const memoCalls = memoWrites.mock.calls.filter(([items]) => Object.keys(items).some((k) => k.startsWith('memo:')));
+    expect(memoCalls).toHaveLength(1);
+  });
+
   // 4.5-4
   it('4.5-4 메모 글이 있는 메모를 지울 때 확인을 받고, 확인하면 저장소와 목록에서 사라진다', async () => {
     const area = createMemoryArea();

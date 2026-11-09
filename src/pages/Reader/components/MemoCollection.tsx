@@ -16,6 +16,7 @@ import { Route } from '../route';
 import { SourceFilter, excerptAround, filterMemos } from '../logic/memoSearch';
 import { netflixWatchUrl } from '../logic/netflixUrl';
 import { isBookMemoAnchored } from '../logic/bookMemos';
+import { useMemoSaver } from '../../../shared/memo/useMemoSaver';
 
 const PAGE_SIZE = 100;
 
@@ -157,26 +158,29 @@ export const MemoCollection: React.FC<{ navigate: (route: Route) => void }> = ({
 
   useEffect(() => setLimit(PAGE_SIZE), [query, source, onlyWithNote]);
 
-  const save = (memo: Memo) => {
+  // 메모 글은 입력이 잠깐 멈춘 뒤 한 번 저장하고, 편집을 닫으면 바로 저장한다.
+  const saver = useMemoSaver((memo) => {
     putMemo(area, memo)
       .then(() => setSaveFailed(false))
       .catch((e) => {
         console.error('[NF-STUDY] Failed to save memo:', e);
         setSaveFailed(true);
       });
-  };
+  });
+  useEffect(() => saver.flush(), [editingId, saver]);
 
   const updateNote = (id: string, note: string) => {
     const target = memosRef.current.find((m) => m.id === id);
     if (!target) return;
     const updated = { ...target, note, updatedAt: Date.now() };
     setMemos((prev) => prev && prev.map((m) => (m.id === id ? updated : m)));
-    save(updated);
+    saver.schedule(updated);
   };
 
   const removeMemo = (id: string) => {
     setMemos((prev) => prev && prev.filter((m) => m.id !== id));
     if (editingId === id) setEditingId(null);
+    saver.cancel(id);
     deleteMemo(area, id).catch((e) => console.error('[NF-STUDY] Failed to delete memo:', e));
   };
 

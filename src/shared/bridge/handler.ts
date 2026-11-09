@@ -10,7 +10,13 @@ import { StorageArea } from '../storage/storageArea';
 import { NETFLIX_KEY, NETFLIX_PREFIX } from '../storage/keys';
 import { StorageError, toStorageErrorCode } from '../storage/errors';
 import { BridgeCall, BridgeResult, ExtensionPage } from './protocol';
-import { isValidChecklist, isValidItemsPerPage, isValidStudiedVideo, normalizeNetflixSettings } from './netflixRecords';
+import {
+  StudiedVideoRecord,
+  isValidChecklist,
+  isValidItemsPerPage,
+  isValidStudiedVideo,
+  normalizeNetflixSettings,
+} from './netflixRecords';
 
 // 서비스 워커에서 넷플릭스 페이지의 요청을 처리한다. 넷플릭스 메모와 넷플릭스 학습 기록만 다룬다(4.3-1).
 // 로그인했는지는 "됨/안 됨" 하나만 돌려주고, 오류는 종류 코드만 돌려준다(4.3-2).
@@ -82,9 +88,14 @@ export async function handleBridgeCall(
         const values = keys.length > 0 ? await area.get(keys) : {};
         return { ok: true, result: Object.values(values).filter(isValidStudiedVideo) };
       }
-      case 'studied.put':
-        await area.set({ [NETFLIX_KEY.studied(call.video.videoId)]: call.video });
+      case 'studied.put': {
+        // 체크할 때마다 오므로, 시각만 조금 바뀐 같은 기록은 다시 쓰지 않는다(Firestore 하루 쓰기 한도).
+        const key = NETFLIX_KEY.studied(call.video.videoId);
+        const stored = await one(key);
+        if (isValidStudiedVideo(stored) && sameStudiedVideo(stored, call.video)) return { ok: true };
+        await area.set({ [key]: call.video });
         return { ok: true };
+      }
       case 'studied.delete':
         await area.remove([NETFLIX_KEY.studied(call.videoId)]);
         return { ok: true };
@@ -94,3 +105,13 @@ export async function handleBridgeCall(
   }
   return { ok: false, error: 'invalid' };
 }
+
+// 공부한 시각을 다시 쓰지 않아도 되는 차이. 대시보드의 최근순은 이만큼 늦게 바뀔 수 있다.
+export const STUDIED_REWRITE_AFTER_MS = 10 * 60_000;
+
+const sameStudiedVideo = (a: StudiedVideoRecord, b: StudiedVideoRecord) => {
+  const { updatedAt: at, ...restA } = a;
+  const { updatedAt: bt, ...restB } = b;
+  const keys = new Set([...Object.keys(restA), ...Object.keys(restB)]) as Set<keyof typeof restA>;
+  return Array.from(keys).every((k) => restA[k] === restB[k]) && Math.abs(bt - at) < STUDIED_REWRITE_AFTER_MS;
+};

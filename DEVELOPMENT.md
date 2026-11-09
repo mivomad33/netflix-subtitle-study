@@ -181,7 +181,7 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 - `nf:checklist:{videoId}` → `kv/nf-checklists-0`~`15`(영상 id 해시로 나눔)의 항목 `{videoId}`: 영상의 회차별, 페이지별 5단계 체크리스트
 - `nf:itemsPerPage:{videoId}` → `kv/nf-pages`의 항목 `{videoId}`: 영상의 페이지당 대사 수
 - `nf:studied:{videoId}` → `kv/nf-studied`의 항목 `{videoId}`: 학습한 영상의 메타데이터(ID, 제목, 커버 이미지, 총 페이지 수, 업데이트 시간 등)
-- `meta:netflixUnplaced:{videoId}` → `kv/nfu-{videoId}`의 항목 `ids`: 학습 패널이 그 영상의 대사에서 찾지 못한 넷플릭스 메모 id 목록. 메모 모아 보기가 "위치를 찾지 못함"을 붙일 때 쓰고, 패널을 열 때마다 다시 쓰므로 백업에는 넣지 않습니다.
+- `meta:netflixUnplaced:{videoId}` → `kv/nf-unplaced`의 항목 `{videoId}`: 학습 패널이 그 영상의 대사에서 찾지 못한 넷플릭스 메모 id 목록. 메모 모아 보기가 "위치를 찾지 못함"을 붙일 때 쓰고, 패널을 열 때마다 다시 쓰므로 백업에는 넣지 않습니다.
 
 ### 저장 상한과 보안 규칙
 

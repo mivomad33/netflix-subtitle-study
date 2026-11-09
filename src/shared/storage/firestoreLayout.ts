@@ -53,7 +53,7 @@ export function locate(key: string): Location | null {
   if ((r = rest(key, NETFLIX_PREFIX.checklist))) return { kind: 'kv', docId: `nf-checklists-${hash(r) % CHECKLIST_SHARDS}`, field: r };
   if ((r = rest(key, NETFLIX_PREFIX.itemsPerPage))) return { kind: 'kv', docId: 'nf-pages', field: r };
   if ((r = rest(key, NETFLIX_PREFIX.studied))) return { kind: 'kv', docId: 'nf-studied', field: r };
-  if ((r = rest(key, UNPLACED_PREFIX))) return { kind: 'kv', docId: `nfu-${encodeId(r)}`, field: 'ids' };
+  if ((r = rest(key, UNPLACED_PREFIX))) return { kind: 'kv', docId: 'nf-unplaced', field: r };
   return null;
 }
 
@@ -69,7 +69,7 @@ export function keyOf(docId: string, field: string): string | null {
   if (/^nf-checklists-\d+$/.test(docId)) return `${NETFLIX_PREFIX.checklist}${field}`;
   if (docId === 'nf-pages') return `${NETFLIX_PREFIX.itemsPerPage}${field}`;
   if (docId === 'nf-studied') return `${NETFLIX_PREFIX.studied}${field}`;
-  if ((r = after('nfu-')) && field === 'ids') return `${UNPLACED_PREFIX}${decodeId(r)}`;
+  if (docId === 'nf-unplaced') return `${UNPLACED_PREFIX}${field}`;
   return null;
 }
 

@@ -33,6 +33,23 @@ describe('bridge request handling', () => {
     expect((await listMemos(area)).map((m) => m.id).sort()).toEqual(['b1', 'n2']);
   });
 
+  it('does not rewrite a studied video when only the time moved a little', async () => {
+    const area = createMemoryArea();
+    const set = vi.spyOn(area, 'set');
+    const video = { videoId: 'v1', title: 'Show', cover: '', epTitle: 'Ep', epSeq: 1, seasonSeq: 1, totalPages: 3, updatedAt: 1_000 };
+    await run(area, { op: 'studied.put', video });
+    await run(area, { op: 'studied.put', video: { ...video, updatedAt: 1_000 + 60_000 } });
+    expect(set).toHaveBeenCalledTimes(1);
+    // 다른 값이 바뀌었거나 오래 지났으면 쓴다(대시보드가 최근 공부한 순으로 늘어놓는다).
+    await run(area, { op: 'studied.put', video: { ...video, totalPages: 4, updatedAt: 2_000 } });
+    await run(area, { op: 'studied.put', video: { ...video, totalPages: 4, updatedAt: 2_000 + 11 * 60_000 } });
+    expect(set).toHaveBeenCalledTimes(3);
+    expect(await run(area, { op: 'studied.list' })).toEqual({
+      ok: true,
+      result: [{ ...video, totalPages: 4, updatedAt: 2_000 + 11 * 60_000 }],
+    });
+  });
+
   it('4.7-3 has no legacy migration and opens extension pages', async () => {
     const area = createMemoryArea();
     expect(await run(area, { op: 'legacy.migrate', payload: { annotations: {}, studiedVideos: null } })).toBeNull();

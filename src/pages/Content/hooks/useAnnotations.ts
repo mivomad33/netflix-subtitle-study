@@ -3,6 +3,8 @@ import { Memo, createId } from '../../../shared/memo/types';
 import { reportStorageError, storeRead, storeWrite, useStoreEvent, useStudyAuth } from '../utils/studyStore';
 import { getVideoInfo } from '../utils/dashboardHelper';
 import { getAnnotationsForSentence } from '../utils/annotationHelper';
+import { withPending } from '../../../shared/memo/memoSaver';
+import { useMemoSaver } from '../../../shared/memo/useMemoSaver';
 
 export interface NewAnnotationInput {
   sentenceStartMs: number;
@@ -14,6 +16,7 @@ export interface NewAnnotationInput {
 type Sentence = { startTime_ms: number; text: string };
 
 // 넷플릭스 영상 하나의 메모. 로그인했을 때만 저장소에서 불러오고, 바뀔 때마다 그 메모 하나만 저장한다.
+// 메모 글은 입력이 잠깐 멈춘 뒤 한 번 저장한다(글자마다 쓰지 않는다).
 // 어느 대사에도 붙지 않는 메모는 모아 보기가 "위치를 찾지 못함"으로 보이도록 저장소에 알린다.
 // 다른 곳에서 이 영상의 메모가 바뀌었다는 알림이 오면 다시 읽는다(4.2-3).
 export function useAnnotations(videoId: string | number, sentences: Sentence[] = []) {
@@ -28,6 +31,14 @@ export function useAnnotations(videoId: string | number, sentences: Sentence[] =
   sourceIdRef.current = videoId.toString();
   // 이 화면에서 쓴 횟수. 다시 읽는 사이에 쓰면 읽은 목록(쓰기 전일 수 있다)을 버린다.
   const writeSeq = useRef(0);
+
+  const saver = useMemoSaver((memo: Memo) => {
+    writeSeq.current += 1;
+    const write = () => {
+      storeWrite({ op: 'memos.put', memo }, write).then((ok) => setSaveFailed(!ok));
+    };
+    write();
+  });
 
   const load = useCallback((first: boolean) => {
     const sourceId = sourceIdRef.current;
@@ -45,13 +56,15 @@ export function useAnnotations(videoId: string | number, sentences: Sentence[] =
           setLoadedVideoId(sourceId);
         } else if (writeSeq.current === seq) {
           // 다시 읽을 때는 저장소 쪽이 기준이다(다른 곳에서 지운 메모도 사라진다).
-          setAnnotations(stored);
+          // 아직 저장하지 않은 글은 되돌리지 않는다.
+          const pending = new Map(Array.from(saver.pending()).filter(([, m]) => m.sourceId === sourceId));
+          setAnnotations(withPending(stored, pending));
         }
       })
       .catch((e) => {
         if (sourceIdRef.current === sourceId) reportStorageError(e, () => load(first));
       });
-  }, []);
+  }, [saver]);
 
   useEffect(() => {
     // 로그아웃하면 앞 계정의 메모를 화면에서 지운다. 영상이 바뀌면 그 영상의 메모를 새로 읽는다.
@@ -100,14 +113,6 @@ export function useAnnotations(videoId: string | number, sentences: Sentence[] =
     });
   }, [annotations, auth, loadedVideoId, sentencesByText, videoId]);
 
-  const save = useCallback((memo: Memo) => {
-    writeSeq.current += 1;
-    const write = () => {
-      storeWrite({ op: 'memos.put', memo }, write).then((ok) => setSaveFailed(!ok));
-    };
-    write();
-  }, []);
-
   const addAnnotation = useCallback(
     (input: NewAnnotationInput): Memo => {
       const now = Date.now();
@@ -130,10 +135,10 @@ export function useAnnotations(videoId: string | number, sentences: Sentence[] =
           : {}),
       };
       setAnnotations((prev) => [...prev, memo]);
-      save(memo);
+      saver.now(memo);
       return memo;
     },
-    [save, videoId]
+    [saver, videoId]
   );
 
   const updateNote = useCallback(
@@ -142,16 +147,21 @@ export function useAnnotations(videoId: string | number, sentences: Sentence[] =
       if (!target) return;
       const updated = { ...target, note, updatedAt: Date.now() };
       setAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
-      save(updated);
+      writeSeq.current += 1;
+      saver.schedule(updated);
     },
-    [save]
+    [saver]
   );
 
-  const removeAnnotation = useCallback((id: string) => {
-    setAnnotations((prev) => prev.filter((a) => a.id !== id));
-    writeSeq.current += 1;
-    storeWrite({ op: 'memos.delete', id });
-  }, []);
+  const removeAnnotation = useCallback(
+    (id: string) => {
+      setAnnotations((prev) => prev.filter((a) => a.id !== id));
+      saver.cancel(id);
+      writeSeq.current += 1;
+      storeWrite({ op: 'memos.delete', id });
+    },
+    [saver]
+  );
 
   return { annotations, addAnnotation, updateNote, removeAnnotation, saveFailed };
 }

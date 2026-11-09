@@ -124,8 +124,9 @@ describe('4.5-2 size limits', () => {
   it('limits list length: just under passes, over fails', async () => {
     const db = as('abc');
     const list = (n: number) => Array.from({ length: n }, (_, i) => `id${i}`);
-    await assertSucceeds(setDoc(doc(db, 'users/abc/kv/nfu-v1'), { e: { ids: list(5000) } }));
-    await assertFails(setDoc(doc(db, 'users/abc/kv/nfu-v1'), { e: { ids: list(5001) } }));
+    await assertSucceeds(setDoc(doc(db, 'users/abc/kv/nf-unplaced'), { e: entries(5000) }));
+    await assertFails(setDoc(doc(db, 'users/abc/kv/nf-unplaced'), { e: entries(5001) }));
+    await assertFails(setDoc(doc(db, 'users/abc/kv/nfu-v1'), { e: { ids: list(1) } }));
     const chapters = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `c${i}`, title: '', paragraphCount: 1 }));
     await assertSucceeds(setDoc(doc(db, 'users/abc/kv/book-bk1'), book({ chapters: chapters(3000) })));
     await assertFails(setDoc(doc(db, 'users/abc/kv/book-bk1'), book({ chapters: chapters(3001) })));

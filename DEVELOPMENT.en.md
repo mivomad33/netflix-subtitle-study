@@ -181,7 +181,7 @@ Each key is stored as follows. Book, chapter, and video ids in document ids are 
 - `nf:checklist:{videoId}` → entry `{videoId}` of `kv/nf-checklists-0`–`15` (split by a hash of the video id): Five-step checklist for each round and page of a video
 - `nf:itemsPerPage:{videoId}` → entry `{videoId}` of `kv/nf-pages`: Lines per page for a video
 - `nf:studied:{videoId}` → entry `{videoId}` of `kv/nf-studied`: Metadata for a studied video (ID, title, cover image, total pages, update time, and so on)
-- `meta:netflixUnplaced:{videoId}` → entry `ids` of `kv/nfu-{videoId}`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
+- `meta:netflixUnplaced:{videoId}` → entry `{videoId}` of `kv/nf-unplaced`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
 
 ### Storage limit and security rules
 

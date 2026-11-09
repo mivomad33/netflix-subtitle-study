@@ -45,7 +45,7 @@ service cloud.firestore {
         || (docId.matches('nf-checklists-([0-9]|1[0-5])') && d.e.size() <= 5000)
         || (docId == 'nf-pages' && d.e.size() <= 5000)
         || (docId == 'nf-studied' && d.e.size() <= 5000)
-        || ((docId.matches('nfu-.+') && docId.size() <= 1500) && d.e.keys().hasOnly(['ids']) && d.e.ids is list && d.e.ids.size() <= 5000)
+        || (docId == 'nf-unplaced' && d.e.size() <= 5000)
       );
     }
 
