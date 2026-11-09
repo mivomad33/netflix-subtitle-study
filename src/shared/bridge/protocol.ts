@@ -6,6 +6,7 @@ import {
   isValidChecklist,
   isValidItemsPerPage,
   isValidNetflixSettings,
+  jsonLength,
   isValidStudiedVideo,
 } from './netflixRecords';
 
@@ -75,14 +76,6 @@ export const MAX_MEMO_CHARS = 50_000;
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v !== '';
 export const isShortId = (v: unknown): v is string => isNonEmptyString(v) && v.length <= MAX_ID_LENGTH;
-const jsonLength = (v: unknown) => {
-  try {
-    return JSON.stringify(v).length;
-  } catch {
-    return Infinity;
-  }
-};
-
 const isNetflixMemo = (v: unknown): v is Memo =>
   isValidMemo(v) && v.kind === 'netflix' && isShortId(v.id) && isShortId(v.sourceId) && jsonLength(v) <= MAX_MEMO_CHARS;
 

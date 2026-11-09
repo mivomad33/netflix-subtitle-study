@@ -65,7 +65,8 @@ export const MAX_CHECKLIST_CHARS = 100_000;
 const MAX_ROUNDS = 100;
 const MAX_PAGES = 1000;
 
-const jsonLength = (v: unknown) => {
+// JSON 글자 수(직렬화할 수 없으면 무한대). 크기 상한 검사에 쓴다.
+export const jsonLength = (v: unknown) => {
   try {
     return JSON.stringify(v).length;
   } catch {
@@ -109,11 +110,15 @@ export interface StudiedVideoRecord {
 
 export const MAX_STUDIED_CHARS = 4000;
 
+// 공부한 영상 기록의 글자 수 상한. 화면은 이 값에 맞게 잘라 저장한다.
+export const MAX_STUDIED_TITLE = 500;
+export const MAX_STUDIED_COVER = 2000;
+
 const STUDIED_FIELDS: Record<keyof StudiedVideoRecord, (v: unknown) => boolean> = {
   videoId: (v) => typeof v === 'string' && v !== '' && v.length <= 200,
-  title: (v) => typeof v === 'string' && v.length <= 500,
-  cover: (v) => typeof v === 'string' && v.length <= 2000,
-  epTitle: (v) => typeof v === 'string' && v.length <= 500,
+  title: (v) => typeof v === 'string' && v.length <= MAX_STUDIED_TITLE,
+  cover: (v) => typeof v === 'string' && v.length <= MAX_STUDIED_COVER,
+  epTitle: (v) => typeof v === 'string' && v.length <= MAX_STUDIED_TITLE,
   epSeq: (v) => typeof v === 'number' && Number.isFinite(v),
   seasonSeq: (v) => typeof v === 'number' && Number.isFinite(v),
   totalPages: (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 100000,

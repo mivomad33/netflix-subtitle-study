@@ -1,6 +1,6 @@
 // 서비스 워커에 붙는 포트. 서비스 워커는 쉬면 멈추므로(약 30초), 끊기면 바로 다시 붙고
 // 보내던 요청을 한 번 더 보낸다. 다시 붙으면 onReconnect로 알려, 그 사이 놓친 변경을 다시 읽게 한다(4.2-3).
-import { StorageError, isStorageErrorCode } from '../storage/errors';
+import { StorageError, storageErrorFromCode } from '../storage/errors';
 import { KEEPALIVE_MS, PING, RpcEvent, isRpcEvent, isRpcResponse } from './protocol';
 
 export interface PortLike {
@@ -45,7 +45,7 @@ export function createPortClient(options: PortClientOptions): PortClient {
       pending.delete(message.id);
       clearTimeout(p.timer);
       if (message.ok) p.resolve(message.result);
-      else p.reject(new StorageError(isStorageErrorCode(message.error) ? message.error : 'unknown'));
+      else p.reject(storageErrorFromCode(message.error));
       return;
     }
     if (isRpcEvent(message)) options.onEvent?.(message);

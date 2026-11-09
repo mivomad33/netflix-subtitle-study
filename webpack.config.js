@@ -36,6 +36,7 @@ if (fileSystem.existsSync(secretsPath)) {
 const isDevelopment = process.env.NODE_ENV !== 'production';
 // E2E 빌드(npm run build:e2e): 에뮬레이터에 붙고 테스트 로그인 경로가 있는 서비스 워커를 build-e2e에 만든다.
 const isE2E = process.env.NF_E2E === '1';
+const outDir = path.resolve(__dirname, isE2E ? 'build-e2e' : 'build');
 
 // Firebase 웹 설정은 커밋하지 않는 로컬 파일(또는 환경 변수 NF_FIREBASE_CONFIG)에서 넣는다.
 // 없으면 null을 넣고, 그 빌드는 "Firebase 설정이 없습니다" 안내를 보인다(4.10-5).
@@ -86,7 +87,7 @@ var options = {
   },
   output: {
     filename: '[name].bundle.js',
-    path: path.resolve(__dirname, isE2E ? 'build-e2e' : 'build'),
+    path: outDir,
     clean: true,
     publicPath: ASSET_PATH,
   },
@@ -175,13 +176,12 @@ var options = {
     new webpack.EnvironmentPlugin(['NODE_ENV']),
     new webpack.DefinePlugin({
       __NF_FIREBASE_CONFIG__: JSON.stringify(firebaseConfig),
-      __NF_E2E__: JSON.stringify(isE2E),
     }),
     new CopyWebpackPlugin({
       patterns: [
         {
           from: 'src/manifest.json',
-          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
+          to: outDir,
           force: true,
           transform: function (content, path) {
             // generates the manifest file using the package.json informations
@@ -200,7 +200,7 @@ var options = {
       patterns: [
         {
           from: 'src/pages/Content/content.styles.css',
-          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
+          to: outDir,
           force: true,
         },
       ],
@@ -209,7 +209,7 @@ var options = {
       patterns: [
         {
           from: 'src/assets/img/icon-128.png',
-          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
+          to: outDir,
           force: true,
         },
       ],
@@ -218,7 +218,7 @@ var options = {
       patterns: [
         {
           from: 'src/assets/img/icon-34.png',
-          to: path.join(__dirname, isE2E ? 'build-e2e' : 'build'),
+          to: outDir,
           force: true,
         },
       ],

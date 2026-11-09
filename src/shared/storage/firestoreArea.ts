@@ -14,7 +14,7 @@ import {
   onSnapshot,
   writeBatch,
 } from 'firebase/firestore';
-import { StorageArea, StorageChanges } from './storageArea';
+import { StorageArea, StorageChanges, clone, sameJson as same } from './storageArea';
 import { StorageError, toStorageError } from './errors';
 import {
   CH,
@@ -56,8 +56,6 @@ type Entries = Record<string, unknown>;
 const MAX_BATCH_OPS = 400;
 const MAX_BATCH_BYTES = 6 * 1024 * 1024;
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -279,7 +277,8 @@ export function createFirestoreArea(db: Firestore, uid: string, options: Firesto
     await ready();
     const p = plan(items);
     if (p.kv.size === 0) return;
-    if (projectedUsage(p) > limit && projectedUsage(p) > currentUsage()) throw new StorageError('quota-exceeded');
+    const projected = projectedUsage(p);
+    if (projected > limit && projected > currentUsage()) throw new StorageError('quota-exceeded');
     const idxBefore = index();
     try {
       // 본문 조각을 먼저 쓰고 목록 문서(chsizes)를 나중에 써서, 읽는 쪽이 반쪽 본문을 보지 않게 한다.

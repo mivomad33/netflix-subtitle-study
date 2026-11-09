@@ -14,12 +14,9 @@ export function useAuthState(auth: AuthClient): AuthState {
 }
 
 const NOTICES: Record<SignedOutNotice, string> = {
-  cancelled: '로그인을 취소했습니다.',
   expired: '로그인이 만료되었거나 계정을 쓸 수 없게 되었습니다. 다시 로그인하세요.',
   'signed-out': '로그아웃했습니다. 데이터는 계정에 남아 있어 다시 로그인하면 보입니다.',
   deleted: '탈퇴했습니다. 계정과 모든 데이터를 지웠습니다.',
-  failed: '로그인하지 못했습니다. 잠시 뒤 다시 시도하세요.',
-  network: '인터넷에 연결되지 않아 로그인하지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.',
 };
 
 // 로그인하지 않았으면 안의 화면(저장소를 읽는 화면)을 그리지 않고 로그인 안내를 보인다(4.1-2).

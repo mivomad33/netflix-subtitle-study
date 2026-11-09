@@ -130,6 +130,17 @@ export function createBackend(options: BackendOptions): Backend {
     db = createDb();
   };
 
+  // 저장소를 닫고(필요하면 그사이 다른 일을 하고) 캐시를 지운다. 끝날 때까지 새 로그인은 기다린다.
+  const closeAndReset = async (between?: () => Promise<void>) => {
+    const done = (async () => {
+      closeArea();
+      await between?.();
+      await resetCache();
+    })();
+    resetting = done.catch(() => {});
+    await done;
+  };
+
   onAuthStateChanged(auth, (user: User | null) => {
     resetting.then(() => {
       if (user) {
@@ -174,13 +185,7 @@ export function createBackend(options: BackendOptions): Backend {
     signOut: () =>
       wrap(async () => {
         pendingNotice = 'signed-out';
-        const done = (async () => {
-          closeArea();
-          await signOut(auth);
-          await resetCache();
-        })();
-        resetting = done.catch(() => {});
-        await done;
+        await closeAndReset(() => signOut(auth));
       }),
     deleteAccount: () =>
       wrap(async () => {
@@ -203,12 +208,7 @@ export function createBackend(options: BackendOptions): Backend {
             await reauthenticateWithCredential(user, await credential());
           },
         });
-        const done = (async () => {
-          closeArea();
-          await resetCache();
-        })();
-        resetting = done.catch(() => {});
-        await done;
+        await closeAndReset();
       }),
   };
 }

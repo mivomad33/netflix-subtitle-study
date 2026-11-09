@@ -1,7 +1,7 @@
 // Dashboard helper for netflix-subtitle-study
 
 import { VideoMetadata } from '../../../types';
-import { StudiedVideoRecord } from '../../../shared/bridge/netflixRecords';
+import { MAX_STUDIED_COVER, MAX_STUDIED_TITLE, StudiedVideoRecord } from '../../../shared/bridge/netflixRecords';
 import { storeWrite } from './studyStore';
 
 export interface VideoInfo {
@@ -95,16 +95,15 @@ export const registerVideoMetadata = async (videoId: string | number, totalTabs:
     // 저장소의 길이 상한(netflixRecords)을 넘지 않게 자른다.
     const record: StudiedVideoRecord = {
       videoId: videoId.toString(),
-      title: title.slice(0, 500),
-      cover: cover.length <= 2000 ? cover : '',
-      epTitle: (epTitle || '').slice(0, 500),
+      title: title.slice(0, MAX_STUDIED_TITLE),
+      cover: cover.length <= MAX_STUDIED_COVER ? cover : '',
+      epTitle: (epTitle || '').slice(0, MAX_STUDIED_TITLE),
       epSeq: Number(epSeq) || 1,
       seasonSeq: Number(seasonSeq) || 1,
       totalPages: totalTabs,
       updatedAt: Date.now(),
     };
-    const write = (): Promise<boolean> => storeWrite({ op: 'studied.put', video: record }, () => void write());
-    await write();
+    await storeWrite({ op: 'studied.put', video: record });
   } catch (e) {
     console.error(
       '[NF-STUDY] Failed to register studied video metadata. Error:',

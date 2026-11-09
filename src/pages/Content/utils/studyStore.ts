@@ -6,7 +6,7 @@ import {
   isValidNetflixSettings,
   normalizeNetflixSettings,
 } from '../../../shared/bridge/netflixRecords';
-import { StorageError, StorageErrorCode } from '../../../shared/storage/errors';
+import { StorageError, StorageErrorCode, toStorageErrorCode } from '../../../shared/storage/errors';
 import { StoreClient, getStoreClient } from './storeClient';
 
 // 넷플릭스 화면의 로그인 상태, 설정, 저장 오류 안내를 한곳에서 들고 있는 작은 저장소.
@@ -203,7 +203,7 @@ export function settingSetter<K extends keyof NetflixSettings>(key: K): Setter<N
 
 // 저장 실패를 안내로 남긴다. 로그아웃(signed-out)은 오류가 아니라 로그인 안내로 바꾼다.
 export function reportStorageError(error: unknown, retry?: () => void, op?: BridgeCall['op']) {
-  const code: StorageErrorCode = error instanceof StorageError ? error.code : 'unknown';
+  const code = toStorageErrorCode(error);
   console.error('[NF-STUDY] storage error:', code);
   if (code === 'signed-out') {
     setAuth('out');

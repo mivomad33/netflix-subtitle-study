@@ -1,13 +1,11 @@
 // 확장 프로그램 화면이 보는 로그인 상태. 넷플릭스 화면은 "로그인됨/안 됨"만 받는다(4.3-2).
-export type SignedOutNotice = 'cancelled' | 'expired' | 'signed-out' | 'deleted' | 'failed' | 'network';
+export type SignedOutNotice = 'expired' | 'signed-out' | 'deleted';
 
 export type AuthState =
   | { status: 'loading' }
   | { status: 'unconfigured' }
   | { status: 'signedOut'; notice?: SignedOutNotice }
   | { status: 'signedIn'; email: string };
-
-export type AuthActionResult = { ok: true } | { ok: false; error: string };
 
 // 확장 프로그램 화면이 쓰는 로그인·계정 기능. 실제로는 서비스 워커에 부탁하고, 테스트와 개발 화면은 가짜를 쓴다.
 export interface AuthClient {

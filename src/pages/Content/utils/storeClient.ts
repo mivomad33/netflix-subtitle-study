@@ -6,7 +6,7 @@ import {
   BridgeResponse,
   isBridgeEvent,
 } from '../../../shared/bridge/protocol';
-import { StorageError, isStorageErrorCode } from '../../../shared/storage/errors';
+import { StorageError, storageErrorFromCode } from '../../../shared/storage/errors';
 
 // 넷플릭스 페이지 코드에서 저장소를 쓰는 길. 페이지 코드는 chrome.*를 쓸 수 없어서
 // content script(ContentLoader)에 메시지로 부탁하고, content script가 서비스 워커에 넘긴다.
@@ -35,7 +35,7 @@ export function createBridgeClient(win: Window = window, timeoutMs = 20000): Sto
           clearTimeout(timer);
           win.removeEventListener('message', listener);
           if (data.ok) resolve(data.result as T);
-          else reject(new StorageError(isStorageErrorCode(data.error) ? data.error : 'unknown'));
+          else reject(storageErrorFromCode(data.error));
         };
         win.addEventListener('message', listener);
         win.postMessage({ channel: BRIDGE_REQUEST, requestId, ...call }, win.location.origin);

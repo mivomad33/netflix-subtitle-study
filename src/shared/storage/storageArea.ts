@@ -1,4 +1,4 @@
-// 공통 저장소에 접근하는 얇은 층. 실제로는 chrome.storage.local, 테스트와 개발 화면에서는 메모리를 쓴다.
+// 공통 저장소에 접근하는 얇은 층. 실제로는 서비스 워커의 Firestore(포트로 부탁), 테스트와 개발 화면에서는 메모리를 쓴다.
 export type StorageChanges = Record<string, { oldValue?: unknown; newValue?: unknown }>;
 
 export interface StorageArea {
@@ -9,8 +9,11 @@ export interface StorageArea {
   onChanged(listener: (changes: StorageChanges) => void): () => void;
 }
 
-const clone = <T>(value: T): T =>
+export const clone = <T>(value: T): T =>
   value === undefined ? value : JSON.parse(JSON.stringify(value));
+
+// JSON으로 같은 값인지 본다(저장소 값은 JSON이다).
+export const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export function createMemoryArea(initial: Record<string, unknown> = {}): StorageArea {
   const data = new Map<string, unknown>(Object.entries(clone(initial)));
@@ -51,31 +54,6 @@ export function createMemoryArea(initial: Record<string, unknown> = {}): Storage
     onChanged(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
-    },
-  };
-}
-
-// chrome.storage.local을 쓰는 구현. 확장 프로그램 화면과 content script에서 쓴다.
-export function createChromeArea(): StorageArea {
-  const local = (globalThis as any).chrome?.storage?.local;
-  if (!local) {
-    throw new Error('chrome.storage.local is not available');
-  }
-  return {
-    get: (keys) => local.get(keys),
-    async getKeys() {
-      if (typeof local.getKeys === 'function') return local.getKeys();
-      return Object.keys(await local.get(null));
-    },
-    set: (items) => local.set(items),
-    remove: (keys) => local.remove(keys),
-    onChanged(listener) {
-      const handler = (changes: StorageChanges, areaName: string) => {
-        if (areaName === 'local') listener(changes);
-      };
-      const events = (globalThis as any).chrome.storage.onChanged;
-      events.addListener(handler);
-      return () => events.removeListener(handler);
     },
   };
 }

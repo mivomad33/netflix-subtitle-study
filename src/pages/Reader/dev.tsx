@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { StorageArea, createMemoryArea } from '../../shared/storage/storageArea';
+import { USAGE_LIMIT_BYTES } from '../../shared/storage/firestoreLayout';
 import { ReaderEnvProvider } from './env';
 import App from './App';
 import { seedDemo, seedPerf, syntheticRawBook } from './dev/seed';
@@ -67,7 +68,7 @@ const auth = createFakeAuth({
   initial: AUTH_STATES[params.get('auth') ?? ''],
   area,
   delayMs: 800,
-  usage: params.get('usage') === 'full' ? async () => 20 * 1024 * 1024 : undefined,
+  usage: params.get('usage') === 'full' ? async () => USAGE_LIMIT_BYTES : undefined,
 });
 if (params.get('signin') === 'cancelled') auth.nextSignIn = 'cancelled';
 

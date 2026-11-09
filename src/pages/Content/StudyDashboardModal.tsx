@@ -89,14 +89,8 @@ const StudyDashboardModal: React.FC<StudyDashboardModalProps> = ({ onClose }) =>
 
     // 화면에서 먼저 지우고, 공부한 영상 기록과 그 영상의 체크리스트를 지운다. 메모는 남긴다.
     setVideos((prev) => (prev ?? []).filter((video) => video.videoId !== videoId));
-    const removeVideo = () => {
-      storeWrite({ op: 'studied.delete', videoId }, removeVideo);
-    };
-    const removeChecklist = () => {
-      storeWrite({ op: 'checklist.delete', videoId }, removeChecklist);
-    };
-    removeVideo();
-    removeChecklist();
+    storeWrite({ op: 'studied.delete', videoId });
+    storeWrite({ op: 'checklist.delete', videoId });
   };
 
   return (

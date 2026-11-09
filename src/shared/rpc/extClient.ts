@@ -2,7 +2,7 @@
 // 다른 화면·기기에서 바뀐 것은 서비스 워커가 'changes'로 알린다. 서비스 워커가 멈췄다 다시 붙으면
 // 그 사이 놓친 변경을 전체 목록을 다시 받아 비교해 알린다(4.2-3).
 import { AuthClient, AuthState, isAuthState } from '../auth/types';
-import { StorageArea, StorageChanges } from '../storage/storageArea';
+import { StorageArea, StorageChanges, sameJson as same } from '../storage/storageArea';
 import { EXT_PORT } from './protocol';
 import { PortLike, createPortClient } from './portClient';
 
@@ -11,8 +11,6 @@ export interface ExtensionClient {
   auth: AuthClient;
   close(): void;
 }
-
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export function createExtensionClient(
   connect: () => PortLike = () => chrome.runtime.connect({ name: EXT_PORT }) as unknown as PortLike

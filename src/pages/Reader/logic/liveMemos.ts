@@ -1,8 +1,6 @@
 import { Memo, isValidMemo } from '../../../shared/memo/types';
 import { PREFIX } from '../../../shared/storage/keys';
-import { StorageChanges } from '../../../shared/storage/storageArea';
-
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+import { StorageChanges, sameJson as same } from '../../../shared/storage/storageArea';
 
 // 다른 탭·기기에서 바뀐 메모를 지금 목록에 반영한다(4.2-3). belongs가 거짓인 메모는 목록에서 뺀다.
 // 고치는 중인 메모(keep)는 쓰던 글이 되돌아가지 않게 그대로 둔다.

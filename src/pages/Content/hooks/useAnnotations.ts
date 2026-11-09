@@ -150,10 +150,7 @@ export function useAnnotations(videoId: string | number, sentences: Sentence[] =
   const removeAnnotation = useCallback((id: string) => {
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
     writeSeq.current += 1;
-    const remove = () => {
-      storeWrite({ op: 'memos.delete', id }, remove);
-    };
-    remove();
+    storeWrite({ op: 'memos.delete', id });
   }, []);
 
   return { annotations, addAnnotation, updateNote, removeAnnotation, saveFailed };

@@ -74,4 +74,7 @@ export function toStorageErrorCode(e: unknown): StorageErrorCode {
   }
 }
 
+// 포트·브리지 응답에 실린 오류 코드를 오류로 되돌린다(모르는 값은 unknown).
+export const storageErrorFromCode = (code: unknown) => new StorageError(isStorageErrorCode(code) ? code : 'unknown');
+
 export const toStorageError = (e: unknown) => (e instanceof StorageError ? e : new StorageError(toStorageErrorCode(e)));

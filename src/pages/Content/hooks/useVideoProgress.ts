@@ -64,10 +64,7 @@ export function useVideoProgress(videoId: string | number) {
 
   const saveChecklists = useCallback((next: MultiRoundChecklists) => {
     const target = idRef.current;
-    const write = () => {
-      storeWrite({ op: 'checklist.set', videoId: target, checklist: next }, write);
-    };
-    write();
+    storeWrite({ op: 'checklist.set', videoId: target, checklist: next });
   }, []);
 
   // 로그인했을 때만 바꾼다. 로그아웃 상태에서는 체크리스트 자리에 로그인 안내가 있다.
@@ -93,14 +90,8 @@ export function useVideoProgress(videoId: string | number) {
       setChecklistsState(fresh);
       if (auth !== 'in') return;
       const target = idRef.current;
-      const writeItems = () => {
-        storeWrite({ op: 'itemsPerPage.set', videoId: target, value }, writeItems);
-      };
-      const removeChecklist = () => {
-        storeWrite({ op: 'checklist.delete', videoId: target }, removeChecklist);
-      };
-      writeItems();
-      removeChecklist();
+      storeWrite({ op: 'itemsPerPage.set', videoId: target, value });
+      storeWrite({ op: 'checklist.delete', videoId: target });
     },
     [auth]
   );
