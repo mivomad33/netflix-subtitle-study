@@ -12,8 +12,16 @@ export interface ExtensionClient {
   close(): void;
 }
 
+// 로그인 창(2단계 인증 포함)과 탈퇴의 다시 인증은 사람을 기다리므로 보통 요청보다 오래 기다린다.
+const INTERACTIVE_TIMEOUT_MS = 10 * 60_000;
+
+export interface ExtensionClientOptions {
+  timeoutMs?: number;
+}
+
 export function createExtensionClient(
-  connect: () => PortLike = () => chrome.runtime.connect({ name: EXT_PORT }) as unknown as PortLike
+  connect: () => PortLike = () => chrome.runtime.connect({ name: EXT_PORT }) as unknown as PortLike,
+  options: ExtensionClientOptions = {}
 ): ExtensionClient {
   let state: AuthState = { status: 'loading' };
   const authListeners = new Set<(s: AuthState) => void>();
@@ -58,6 +66,7 @@ export function createExtensionClient(
 
   const client = createPortClient({
     connect,
+    timeoutMs: options.timeoutMs,
     onEvent(event) {
       if (event.event === 'auth' && isAuthState(event.state)) setState(event.state);
       if (event.event === 'changes' && event.changes && typeof event.changes === 'object') {
@@ -118,13 +127,13 @@ export function createExtensionClient(
       return () => authListeners.delete(listener);
     },
     async signIn() {
-      await client.request('auth.signIn');
+      await client.request('auth.signIn', undefined, INTERACTIVE_TIMEOUT_MS);
     },
     async signOut() {
       await client.request('auth.signOut');
     },
     async deleteAccount() {
-      await client.request('account.delete');
+      await client.request('account.delete', undefined, INTERACTIVE_TIMEOUT_MS);
     },
     usage: () => client.request<number>('area.usage'),
   };

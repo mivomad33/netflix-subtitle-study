@@ -12,6 +12,8 @@ export const CH = 'ch';
 
 export const MEMO_SHARDS = 32;
 export const COMPLETION_SHARDS = 8;
+// 영상별 체크리스트도 쌓이면 문서 하나의 한도(1MiB)를 넘으므로 나눠 둔다.
+export const CHECKLIST_SHARDS = 16;
 // 조각 하나의 글자 수(UTF-16). 한 글자가 UTF-8로 3바이트를 넘지 않으므로 조각 문서는 1MiB 아래다.
 export const CHUNK_CHARS = 300_000;
 export const MAX_CHUNKS = 100;
@@ -48,7 +50,7 @@ export function locate(key: string): Location | null {
   if ((r = rest(key, PREFIX.completion))) return { kind: 'kv', docId: `done-${hash(r) % COMPLETION_SHARDS}`, field: r };
   if (key === READER_SETTINGS) return { kind: 'kv', docId: 'settings', field: 'reader' };
   if (key === NETFLIX_KEY.settings) return { kind: 'kv', docId: 'settings', field: 'netflix' };
-  if ((r = rest(key, NETFLIX_PREFIX.checklist))) return { kind: 'kv', docId: 'nf-checklists', field: r };
+  if ((r = rest(key, NETFLIX_PREFIX.checklist))) return { kind: 'kv', docId: `nf-checklists-${hash(r) % CHECKLIST_SHARDS}`, field: r };
   if ((r = rest(key, NETFLIX_PREFIX.itemsPerPage))) return { kind: 'kv', docId: 'nf-pages', field: r };
   if ((r = rest(key, NETFLIX_PREFIX.studied))) return { kind: 'kv', docId: 'nf-studied', field: r };
   if ((r = rest(key, UNPLACED_PREFIX))) return { kind: 'kv', docId: `nfu-${encodeId(r)}`, field: 'ids' };
@@ -64,7 +66,7 @@ export function keyOf(docId: string, field: string): string | null {
   if (docId === 'positions') return `${PREFIX.position}${field}`;
   if (/^done-\d+$/.test(docId)) return `${PREFIX.completion}${field}`;
   if (docId === 'settings') return field === 'reader' ? READER_SETTINGS : field === 'netflix' ? NETFLIX_KEY.settings : null;
-  if (docId === 'nf-checklists') return `${NETFLIX_PREFIX.checklist}${field}`;
+  if (/^nf-checklists-\d+$/.test(docId)) return `${NETFLIX_PREFIX.checklist}${field}`;
   if (docId === 'nf-pages') return `${NETFLIX_PREFIX.itemsPerPage}${field}`;
   if (docId === 'nf-studied') return `${NETFLIX_PREFIX.studied}${field}`;
   if ((r = after('nfu-')) && field === 'ids') return `${UNPLACED_PREFIX}${decodeId(r)}`;

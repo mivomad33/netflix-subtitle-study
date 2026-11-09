@@ -21,8 +21,8 @@ import {
   deleteBook,
 } from './repo';
 import { bookMemo, netflixMemo } from './testFixtures';
-import { KEY } from './keys';
-import { CHUNK_CHARS, USAGE_LIMIT_BYTES } from './firestoreLayout';
+import { KEY, NETFLIX_KEY } from './keys';
+import { CHUNK_CHARS, USAGE_LIMIT_BYTES, docSize } from './firestoreLayout';
 
 const clients: TestClient[] = [];
 const areas: FirestoreArea[] = [];
@@ -95,6 +95,27 @@ describe('4.2-1 every kind is stored in Firestore and read back by a new client'
     const { area } = await open();
     await expect(area.set({ 'meta:legacyMigration': 1 })).rejects.toMatchObject({ code: 'invalid' });
   });
+});
+
+describe('4.2-1 many Netflix checklists', () => {
+  // 영상마다 체크리스트가 쌓여도 한 문서(1MiB 한도)에 몰려 쓰기가 막히지 않는다.
+  it('stores checklists whose total is over 1MiB and reads them back', async () => {
+    const { client, area } = await open();
+    const checklist = (i: number) => ({
+      currentActiveRound: 1,
+      rounds: { '1': Object.fromEntries(Array.from({ length: 1000 }, (_, p) => [String(p), { '0': true, '1': true, '2': true, '3': true, '4': i % 2 === 0 }])) },
+    });
+    const ids = Array.from({ length: 80 }, (_, i) => `video${i}`);
+    for (const [i, id] of ids.entries()) await area.set({ [NETFLIX_KEY.checklist(id)]: checklist(i) });
+    const total = JSON.stringify(ids.map((_, i) => checklist(i))).length;
+    expect(total).toBeGreaterThan(1024 * 1024);
+    const back = await area.get(ids.map((id) => NETFLIX_KEY.checklist(id)));
+    expect(Object.keys(back)).toHaveLength(ids.length);
+    expect(back[NETFLIX_KEY.checklist('video79')]).toEqual(checklist(79));
+    // 운영 Firestore는 1MiB 넘는 문서를 거부한다(에뮬레이터는 막지 않아 크기를 직접 잰다).
+    const kvDocs = await getDocs(collection(client.db, 'users', client.uid, 'kv'));
+    kvDocs.docs.forEach((d) => expect(docSize(client.uid, 'kv', d.id, d.data())).toBeLessThan(1024 * 1024));
+  }, 60000);
 });
 
 describe('4.2-3 changes reach another open client within 10 seconds', () => {

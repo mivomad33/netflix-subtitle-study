@@ -19,7 +19,8 @@ export interface PortClientOptions {
 }
 
 export interface PortClient {
-  request<T = unknown>(method: string, params?: unknown): Promise<T>;
+  // timeoutMs: 이 요청만 다른 시간 제한을 쓴다(로그인 창처럼 사람을 기다리는 요청).
+  request<T = unknown>(method: string, params?: unknown, timeoutMs?: number): Promise<T>;
   close(): void;
 }
 
@@ -104,7 +105,7 @@ export function createPortClient(options: PortClientOptions): PortClient {
   }, options.keepaliveMs ?? KEEPALIVE_MS);
 
   return {
-    request<T>(method: string, params?: unknown) {
+    request<T>(method: string, params?: unknown, requestTimeoutMs = timeoutMs) {
       return new Promise<T>((resolve, reject) => {
         const p = connect();
         if (!p) {
@@ -117,7 +118,7 @@ export function createPortClient(options: PortClientOptions): PortClient {
           resolve: resolve as (v: unknown) => void,
           reject,
           retried: false,
-          timer: setTimeout(() => fail(entry, new StorageError('unavailable')), timeoutMs),
+          timer: setTimeout(() => fail(entry, new StorageError('unavailable')), requestTimeoutMs),
         };
         pending.set(message.id, entry);
         p.postMessage(message);

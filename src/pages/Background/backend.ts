@@ -185,7 +185,13 @@ export function createBackend(options: BackendOptions): Backend {
     signOut: () =>
       wrap(async () => {
         pendingNotice = 'signed-out';
-        await closeAndReset(() => signOut(auth));
+        try {
+          await closeAndReset(() => signOut(auth));
+        } catch (e) {
+          // 로그아웃하지 못했으면 나중의 만료 안내가 "로그아웃했습니다"로 바뀌지 않게 지운다.
+          if (auth.currentUser) pendingNotice = null;
+          throw e;
+        }
       }),
     deleteAccount: () =>
       wrap(async () => {

@@ -178,7 +178,7 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 - `done:{bookId}:{chapterId}` → `kv/done-{0~7}`의 항목 `{bookId}:{chapterId}`: 장 하나의 학습 완료(`done`, `updatedAt`). 끈 것도 `done: false`로 남겨, 백업을 합칠 때 장마다 나중에 바꾼 쪽을 고릅니다. 책을 지우면 함께 지워집니다.
 - `reader:settings` → `kv/settings`의 항목 `reader`: 원서 리더 설정. 글자 크기(`fontSize`)와 소리 내어 읽기 설정(`voiceURI`, `rate`, `repeat`, `autoPause`). 예전의 `allowOnlineVoices`는 쓰지 않지만 저장된 값과 백업은 그대로 받아들입니다.
 - `nf:settings` → `kv/settings`의 항목 `netflix`: 넷플릭스 학습 패널 설정 객체 하나(패널·영상 위 자막·언어별 자막 표시, 자동 멈춤, 페이지 끝 멈춤, 대사 없는 구간 넘기기, 스마트 탐색, 문장 반복, 글자 크기, 패널 너비 비율). 형식은 [netflixRecords.ts](src/shared/bridge/netflixRecords.ts)에 있습니다.
-- `nf:checklist:{videoId}` → `kv/nf-checklists`의 항목 `{videoId}`: 영상의 회차별, 페이지별 5단계 체크리스트
+- `nf:checklist:{videoId}` → `kv/nf-checklists-0`~`15`(영상 id 해시로 나눔)의 항목 `{videoId}`: 영상의 회차별, 페이지별 5단계 체크리스트
 - `nf:itemsPerPage:{videoId}` → `kv/nf-pages`의 항목 `{videoId}`: 영상의 페이지당 대사 수
 - `nf:studied:{videoId}` → `kv/nf-studied`의 항목 `{videoId}`: 학습한 영상의 메타데이터(ID, 제목, 커버 이미지, 총 페이지 수, 업데이트 시간 등)
 - `meta:netflixUnplaced:{videoId}` → `kv/nfu-{videoId}`의 항목 `ids`: 학습 패널이 그 영상의 대사에서 찾지 못한 넷플릭스 메모 id 목록. 메모 모아 보기가 "위치를 찾지 못함"을 붙일 때 쓰고, 패널을 열 때마다 다시 쓰므로 백업에는 넣지 않습니다.

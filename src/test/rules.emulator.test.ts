@@ -95,6 +95,9 @@ describe('4.5-1 users read and write only their own area', () => {
     await assertFails(setDoc(doc(db, 'users/abc/kv/whatever'), { e: {} }));
     await assertFails(setDoc(doc(db, 'users/abc/kv/memos-32'), { e: {} }));
     await assertFails(setDoc(doc(db, 'users/abc/kv/done-8'), { e: {} }));
+    await assertFails(setDoc(doc(db, 'users/abc/kv/nf-checklists'), { e: {} }));
+    await assertFails(setDoc(doc(db, 'users/abc/kv/nf-checklists-16'), { e: {} }));
+    await assertSucceeds(setDoc(doc(db, 'users/abc/kv/nf-checklists-15'), { e: {} }));
   });
 });
 

@@ -29,11 +29,25 @@ export function idTokenFrom(responseUrl: string | undefined): string | null {
   return new URLSearchParams(hash).get('id_token');
 }
 
+// ID 토큰(JWT) 본문의 nonce. 서명은 Firebase가 검사하고, 여기서는 이 로그인 창에서 받은 토큰인지만 본다.
+export function nonceOf(idToken: string): string | null {
+  try {
+    const body = idToken.split('.')[1];
+    if (!body) return null;
+    const json = atob(body.replace(/-/g, '+').replace(/_/g, '/'));
+    const nonce = (JSON.parse(json) as { nonce?: unknown }).nonce;
+    return typeof nonce === 'string' ? nonce : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function launchGoogleSignIn(clientId: string): Promise<string> {
+  const nonce = randomNonce();
   let responseUrl: string | undefined;
   try {
     responseUrl = await chrome.identity.launchWebAuthFlow({
-      url: authUrl(clientId, chrome.identity.getRedirectURL(), randomNonce()),
+      url: authUrl(clientId, chrome.identity.getRedirectURL(), nonce),
       interactive: true,
     });
   } catch {
@@ -42,5 +56,6 @@ export async function launchGoogleSignIn(clientId: string): Promise<string> {
   }
   const token = idTokenFrom(responseUrl);
   if (!token) throw new StorageError('cancelled');
+  if (nonceOf(token) !== nonce) throw new StorageError('invalid');
   return token;
 }

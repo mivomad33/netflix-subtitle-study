@@ -18,7 +18,7 @@
 | 4.1-3 로그인 유지·만료 시 안내 | 사용자 확인 | 단위 `AuthGate.test.tsx` 4.1-3(로그인 → 만료 상태가 오면 만료 안내와 로그인 화면). Auth는 `indexedDBLocalPersistence`. 브라우저 재시작 유지는 사용자 확인 |
 | 4.1-4 로그아웃 시 캐시 지우기(E2E) | 만족 | E2E `e2e/extension.e2e.test.ts` 4.1-4(리더 화면 둘, 계정 A로 쓴 "Alpha Secret Book"이 둘 다에 보이고 서비스 워커의 Firestore IndexedDB에 있음 → 로그아웃 뒤 캐시에 없음 → 계정 B로 로그인하면 A의 것이 없음). `npm run test:e2e` 3개 통과(커밋 7172cf2). 기능 없이 실패: 2026-11-09 로그아웃의 `resetCache`를 잠시 빼고 `npm run test:e2e` → 4.1-4만 실패(캐시에 "Alpha Secret Book"이 남음), 되돌림 |
 | 4.1-5 로그인 취소 안내 | 만족 | 단위 `AuthGate.test.tsx` 4.1-5 |
-| 4.2-1 모든 데이터 Firestore | 만족 | 통합 `firestoreArea.emulator.test.ts` 4.2-1(종류마다 쓰고 새 클라이언트로 읽기), 단위 `noLocalStorageWrites.test.tsx`(넷플릭스 저장 코드가 자막 처리 값 둘 밖의 `localStorage.setItem`을 부르지 않음), 서비스 워커는 `chrome.storage.local.set`을 쓰지 않음(`localCleanup.test.ts`의 지운 표시만) |
+| 4.2-1 모든 데이터 Firestore | 만족 | 통합 `firestoreArea.emulator.test.ts` 4.2-1(종류마다 쓰고 새 클라이언트로 읽기; "many Netflix checklists": 합계 1MiB 넘는 체크리스트 80개를 쓰고 읽으며 kv 문서마다 1MiB 아래. 체크리스트를 한 문서에 두던 코드에서 쓰기가 거부되는 것을 본 뒤 16개 문서로 나눔), 단위 `noLocalStorageWrites.test.tsx`(넷플릭스 저장 코드가 자막 처리 값 둘 밖의 `localStorage.setItem`을 부르지 않음), 서비스 워커는 `chrome.storage.local.set`을 쓰지 않음(`localCleanup.test.ts`의 지운 표시만) |
 | 4.2-2 기존 기능 유지 | 만족 | `npm run test:run` 전체 통과(기존 단위 테스트), 통합 `firestoreArea.emulator.test.ts` 4.2-2(기존 `repo.test.ts`와 같은 경우를 Firestore 저장소로) |
 | 4.2-3 10초 안에 반영(통합·단위·E2E) | 만족 | 통합 4.2-3(두 클라이언트, 10초 안 알림, 나중 쓴 쪽 남음), 단위 `storeBridge.test.ts`·`server.test.ts`·`liveMemos.test.ts`·`StudyPanel.store.test.tsx`(알림 전달, 다시 붙은 뒤 구독 되살림), E2E 4.2-3(CDP `ServiceWorker.stopAllWorkers`로 멈춘 것을 상태 이벤트로 확인한 뒤 다른 클라이언트가 쓴 변경을 넷플릭스 페이지가 10초 안에 받음, 값은 안 옴) |
 | 4.2-4 큰 본문 | 만족 | 통합 `firestoreArea.emulator.test.ts` 4.2-4(1.5MiB 넘는 한국어 장, 조각 정리) |
@@ -35,7 +35,7 @@
 | 4.4-4 대기 표시 | 만족 | 단위 `AuthGate.test.tsx` 4.4-4 |
 | 4.5-1 규칙 uid 분리 | 만족 | 통합 `rules.emulator.test.ts`. 규칙을 모두 허용으로 바꾸면 거부·상한 테스트 9개 실패 확인 뒤 되돌림 |
 | 4.5-2 규칙 크기 상한 | 만족 | 통합 `rules.emulator.test.ts`(상한 바로 아래 통과, 넘으면 거부) |
-| 4.5-3 배포 규칙 일치 | 만족 | 2026-11-09 `firebase deploy --only hosting,firestore:rules,firestore:indexes` 뒤 `firebase deploy --only firestore:rules` 다시 실행 → `latest version of firestore.rules already up to date, skipping upload...` |
+| 4.5-3 배포 규칙 일치 | 만족 | 2026-11-09 `firebase deploy --only hosting,firestore:rules,firestore:indexes` 뒤 `firebase deploy --only firestore:rules` 다시 실행 → `latest version of firestore.rules already up to date, skipping upload...`. 체크리스트 문서를 나눈 규칙으로 고친 뒤 다시 배포(`released rules firestore.rules`)하고 한 번 더 실행해 같은 "already up to date" 확인 |
 | 4.6-1 탈퇴 | 만족 | 통합 `account.emulator.test.ts` 4.6-1(A 문서 0, A Auth 없음, B 그대로), 단위 `AuthGate.test.tsx` 4.6-1(확인 단계 전에는 지우지 않음, 백업 권함) |
 | 4.6-2 탈퇴 재인증·이어 하기 | 만족 | 통합 `account.emulator.test.ts` 4.6-2(중간 실패 뒤 다시 실행, 최근 로그인 필요 시 재인증 후 그사이 쓴 것도 지움) |
 | 4.7-1 chrome.storage.local 지우기 | 만족 | 단위 `localCleanup.test.ts` |
@@ -46,14 +46,14 @@
 | 4.8-3 공개 페이지 | 만족 | Hosting 배포(배포 폴더 `site/`: `index.html`, `privacy/index.html`, `copyright/index.html` 3개뿐). `curl` 두 페이지 200, 연락처·서울 지역·uid·IP·보관 기간·탈퇴·백업·시행일·신고 처리 문구 확인 |
 | 4.8-4 방침 링크 | 만족 | 단위 `AuthGate.test.tsx` 4.8-4(로그인 화면), 4.6-1(탈퇴 확인). README.md·README.en.md "로그인과 데이터" 절에 두 링크 |
 | 4.8-5 OAuth 브랜딩 | 만족(로그인은 사용자 확인) | 2026-11-09 Claude in Chrome(hunt24333)으로 Google Auth Platform 브랜딩에 홈페이지 `https://nf-subtitle-study-21cae.web.app/`, 개인정보처리방침 `.../privacy/`, 승인된 도메인 `nf-subtitle-study-21cae.web.app`을 넣고 저장(저장하려면 필수인 개발자 연락처에 `hunt24333@gmail.com`도 넣음). 다시 열어 값이 남은 것 확인. Audience의 게시 상태 "In production", 사용자 유형 External. 브랜드 검증 상태: "Your branding needs to be verified before it can be shown to users."(검증은 신청 안 함, 2장 결정). 잘라 낸 스크린샷 [oauth-branding.png](oauth-branding.png) |
-| 4.9-1 화면(design-check) | 사용자 확인 | 구현 중 자기 점검: `shoot.mjs`로 1280·1024의 로그인 전(실제 빌드), 로그인됨, 사용량 가득, 탈퇴 확인, 설정 없음을 찍어 봄(axe 위반 없음, `screens/`). `design-check`는 구현 뒤 다음 단계로 권한다 |
+| 4.9-1 화면(design-check) | 다음 단계 | 구현 중 자기 점검: `shoot.mjs`로 1280·1024의 로그인 전(실제 빌드), 로그인됨, 사용량 가득, 탈퇴 확인, 설정 없음을 찍어 봄(axe 위반 없음, `screens/`). `design-check` 깨끗한 회차는 이 스킬 다음 단계(`/browser-check` → `/design-check`)에서 한다. 넷플릭스 패널 안내·네트워크 오류·무료 한도 초과 상태의 스크린샷은 그 단계에서 찍는다 |
 | 4.10-1 권한 | 만족 | `manifest.json`에 identity, `check-build.test.ts`(권한을 하나 더한 manifest면 실패), `npm run check:build` ok |
 | 4.10-2 외부 연결 대상 | 만족 | `check-build.test.ts` 4.10-2(evil.test 호출 실패, 넷플릭스 링크만 있는 번들 통과). 실제 설정 빌드에서 `npm run check:build` ok(모든 JS 검사) |
 | 4.10-3 비밀 값·무시 파일 | 만족 | `check-build.test.ts` 4.10-3(`"private_key":`, `client_secret` 든 파일로 실패), `check:build`가 빌드 결과·추적 파일 검사 ok. `git check-ignore`로 `firebase.config.local.json`, `firebase-debug.log`, `firestore-debug.log`, `ui-debug.log` 무시 확인 |
 | 4.10-4 로그에 개인정보 없음 | 만족 | `grep -rn "console\." src/pages/Background src/shared src/pages/Reader src/pages/Content src/pages/ContentLoader`(테스트 제외): 인증·저장 코드의 로그는 오류 종류 코드(`toStorageErrorCode`)만 넘긴다. 이메일·토큰·메모·본문을 넘기는 로그 없음(`repo.ts` 글자 수 오류 로그도 코드만 남기게 고침) |
 | 4.10-5 설정 주입 | 만족 | 설정 없이 `npm run build`·`check:build` 통과(CI 성공 9a65011). 단위 `AuthGate.test.tsx` 4.10-5(설정 없음 안내). 빌드 결과 `grep -l`로 앱 id: 자리표시 빌드 0개 파일, 이 PC 설정 빌드 2개 파일. `firebase.config.local.json`은 `apps:sdkconfig`로 만들었고 무시됨 |
 | 4.11-1 에뮬레이터 테스트 한 명령 | 만족 | `npm run test:emulator` 38개 통과. `rules.emulator.test.ts`가 프로젝트 id가 demo-로 시작하는지 검사 |
-| 4.11-2 CI | 진행 | `.github/workflows/ci.yml`에 `actions/setup-java`(temurin 21)와 `npm run test:emulator`. E2E는 CI에 없음. 9a65011 CI 성공(run 42573284762) |
+| 4.11-2 CI | 만족 | `.github/workflows/ci.yml`에 `actions/setup-java`(temurin 21)와 `npm run test:emulator`. E2E는 CI에 없음. 9a65011, 7172cf2, a5ce1ff CI 성공. 마지막 커밋은 report.md 참고 |
 | 4.11-3 개발 화면·표시 검사 | 만족 | `reader-dev.html`은 메모리 저장소와 가짜 로그인(`fakeAuth.ts`), 넷플릭스 패널 개발 화면 `netflix-dev.html`(`?auth=out\|wait`, `?error=`). `check:build`의 개발 표시에 `NF_STUDY_DEV_FAKE_AUTH`, `NF_STUDY_E2E_EMULATOR_LOGIN`, 에뮬레이터 연결 문구를 더하고 그 표시를 넣은 번들로 실패하는 테스트(`check-build.test.ts` 4.11-3). 일반 빌드 ok |
 | 4.12-1 README·DEVELOPMENT | 만족 | README·DEVELOPMENT 두 언어에 로그인, Firestore 구조, 20MB·무료 한도, 탈퇴, 옛 로컬 데이터 지우기와 업데이트 전 백업 안내, 방침 링크, `identity` 권한, 설정 파일(`apps:sdkconfig ... --out firebase.config.local.json`, 자기 Firebase 프로젝트로 빌드하기 8단계), 에뮬레이터·E2E 테스트(Java 21 PATH), 배포. 두 언어 대조: 절 구성과 줄 수가 같고(README 226줄, DEVELOPMENT 246줄씩) 절마다 문장을 맞춰 봄(서브에이전트 대조 뒤 메인이 로그인 절을 읽어 확인) |
 | 4.12-2 design.md | 만족 | `docs/design.md` 5장 "계정과 저장 안내"에 로그인 화면, 대기 표시, 계정 표시, 확인 대화상자, 저장 오류 안내, 넷플릭스 패널의 안내를 더함. `design-check`가 이 기준으로 본다 |
@@ -81,6 +81,10 @@
 
 ## 재량 결정
 
+- 넷플릭스 체크리스트는 영상 id 해시로 `kv/nf-checklists-0`~`15` 16개 문서에 나눈다(코드 리뷰 지적). 한 문서에 모으면 쌓인 체크리스트가 Firestore 문서 한도 1MiB를 넘어 쓰기가 막힌다. 아직 머지 전이고 운영 데이터가 없어 옮길 것은 없다.
+- 로그인(`auth.signIn`)과 탈퇴(`account.delete`) 요청은 10분까지 기다린다(보통 요청은 60초). 사람이 2단계 인증을 하는 동안 "네트워크 오류"가 뜨지 않게 한다.
+- 로그인 창에서 받은 ID 토큰의 nonce가 이번 창에서 만든 값과 같은지 본다(보안 리뷰의 낮은 등급 지적). 다르면 `invalid`로 거절한다.
+
 - Firebase(Auth·Firestore)는 서비스 워커 한곳에서만 돈다. 확장 화면과 content script는 `chrome.runtime` 포트로 서비스 워커에 부탁한다. 이유: Firestore 인스턴스가 하나라 로그아웃 때 `terminate` 뒤 `clearIndexedDbPersistence`가 다른 탭에 막히지 않고(4.1-4), 로그인 상태를 나눌 필요가 없다. 넷플릭스 포트는 넷플릭스 작업만 받도록 서비스 워커가 검사한다.
 - Firestore 구조: `users/{uid}/kv/{문서}`에 작은 데이터를 묶어 두고(필드 `e`), 본문은 `users/{uid}/ch/{책}~{장}~{n}` 조각(필드 `t`)으로 둔다. 메모는 id 해시로 32개 문서에 나눈다. 서비스 워커가 `kv` 전체를 한 번 구독해 거울을 두고, 본문은 열 때만 읽는다(4.2-7).
 
@@ -89,6 +93,8 @@
 없음.
 
 ## 놓친 점
+
+- [프로세스] Firestore 에뮬레이터는 문서 1MiB 한도를 막지 않는다. 문서 크기 결함은 테스트에서 `docSize`로 직접 재야 드러났다.
 
 - [프로세스] DEVELOPMENT 문서에 `check:build`가 찾는 문자열(`client_secret`)을 설명으로 적으니 비밀 값 검사가 실패했다. 검사 예외는 `docs/`뿐이라 문구를 바꿨다.
 

@@ -3,6 +3,7 @@ import { attachPort, ServerPort } from './server';
 import { TEST_ENV, createFakeBackend, fakeWorker } from '../../test/fakeBackend';
 import { EXT_PORT, NETFLIX_PORT } from '../../shared/rpc/protocol';
 import { createPortClient } from '../../shared/rpc/portClient';
+import { createExtensionClient } from '../../shared/rpc/extClient';
 import { putMemo } from '../../shared/storage/repo';
 import { bookMemo, netflixMemo } from '../../shared/storage/testFixtures';
 
@@ -31,6 +32,18 @@ describe('service worker ports', () => {
     expect(await client.request('auth.state')).toEqual({ status: 'signedIn', email: 'tester@example.test' });
     expect(await client.request('area.get', { keys: ['memo:b1'] })).toEqual({ 'memo:b1': bookMemo({ id: 'b1' }) });
     client.close();
+  });
+
+  it('waits for a slow interactive sign-in and deletion past the normal request timeout', async () => {
+    const backend = createFakeBackend({}, { status: 'signedOut' });
+    const slow = () => new Promise<void>((r) => setTimeout(r, 300));
+    backend.signIn = slow;
+    backend.deleteAccount = slow;
+    const worker = fakeWorker(backend);
+    const ext = createExtensionClient(worker.connect(EXT_PORT, TEST_ENV.extensionOrigin), { timeoutMs: 50 });
+    await expect(ext.auth.signIn()).resolves.toBeUndefined();
+    await expect(ext.auth.deleteAccount()).resolves.toBeUndefined();
+    ext.close();
   });
 
   it('4.3-1 gives the Netflix port only Netflix operations', async () => {
