@@ -2,6 +2,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { StorageArea, createMemoryArea } from '../../shared/storage/storageArea';
 import { USAGE_LIMIT_BYTES } from '../../shared/storage/firestoreLayout';
+import { StorageError } from '../../shared/storage/errors';
+import { getBook, getChapterParagraphs } from '../../shared/storage/repo';
+import { saveChapterBody } from './logic/bookEdit';
 import { ReaderEnvProvider } from './env';
 import App from './App';
 import { seedDemo, seedPerf, syntheticRawBook } from './dev/seed';
@@ -43,6 +46,20 @@ function persistentArea(): StorageArea {
 const area = persistentArea();
 const params = new URLSearchParams(window.location.search);
 
+// 저장 실패 화면을 보려고 쓰기를 실패시킨다(?fail=write 또는 nfStudyDev.failWrites(true)). 읽기는 그대로 된다.
+let failWrites = params.get('fail') === 'write';
+const appArea: StorageArea = {
+  ...area,
+  async set(items) {
+    if (failWrites) throw new StorageError('unavailable');
+    return area.set(items);
+  },
+  async remove(keys) {
+    if (failWrites) throw new StorageError('unavailable');
+    return area.remove(keys);
+  },
+};
+
 // 소리 내어 읽기: ?voices=device(기본, 좋은 기기 음성 있음) | basic(기본 기기 음성뿐) | none(음성 없음)
 // | unsupported(speechSynthesis 없음) | real(이 브라우저의 실제 음성). 고른 값은 새로 고쳐도 남긴다.
 const VOICES_KEY = 'NF_STUDY_DEV_VOICES';
@@ -82,6 +99,16 @@ const dev = {
   seedDemo: () => seedDemo(area),
   seedPerf: () => seedPerf(area),
   syntheticRawBook,
+  // 쓰기를 실패시키거나 되돌린다(저장 오류 화면).
+  failWrites(on: boolean) {
+    failWrites = on;
+  },
+  // 다른 탭이 그 장의 본문을 고친 것처럼 맨 앞에 문단을 하나 더한다(동시 수정 안내, 열어 둔 리더의 반영).
+  async changeChapterElsewhere(bookId: string, chapterId: string) {
+    const original = await getChapterParagraphs(area, bookId, chapterId);
+    await saveChapterBody(area, { bookId, chapterId, original, after: ['A line added from another tab.', ...original] });
+    return getBook(area, bookId);
+  },
   // 가짜 음성이 읽은 글과 시각(성능 측정 4.6-4 b)
   speech: fakeSpeech,
 };
@@ -102,7 +129,7 @@ async function start() {
   createRoot(document.getElementById('app-container')!).render(
     <ReaderEnvProvider
       env={{
-        area,
+        area: appArea,
         openTab: (url) => {
           console.info('[NF-STUDY dev] open tab:', url);
           window.open(url, '_blank', 'noopener');

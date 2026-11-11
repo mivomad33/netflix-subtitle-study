@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// 성능 측정(원서 리더 명세서 4.10-3, 학습 진행률·소리 내어 읽기 명세서 4.6-4). 개발 서버(npm start)를 띄운 뒤 실행한다.
+// 성능 측정(원서 리더 명세서 4.10-3, 학습 진행률·소리 내어 읽기 명세서 4.6-4, 원서 고치기 명세서 4.3-14). 개발 서버(npm start)를 띄운 뒤 실행한다.
 //   node scripts/perf/measure.mjs [http://localhost:3000]
-// 책 20권(그중 한 권 200만 자)과 메모 5,000개를 개발 화면(reader-dev.html?seed=perf)에 채우고 다섯 시간을 잰다.
+// 책 20권(그중 한 권 200만 자)과 메모 5,000개, 20만 자 장에 붙은 메모 200개를 개발 화면(reader-dev.html?seed=perf)에 채우고 아홉 시간을 잰다.
 // 소리 내어 읽기는 개발 화면의 가짜 음성(voices=device)으로 첫 발화 요청 시각을 잰다.
 // 시간은 브라우저 안에서 동작을 시작한 때부터 결과가 그려진 뒤 다음 화면 그리기까지다.
 // Playwright는 디자인 도구 폴더(DESIGN_TOOLS_DIR, 기본 ~/.cache/design-tools)의 것을 쓴다.
@@ -14,7 +14,17 @@ const require = createRequire(join(toolsDir, 'package.json'));
 const { chromium } = require('playwright');
 
 const base = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
-const LIMITS = { preview: 3000, chapter: 1000, search: 500, bookList: 1000, bookListOld: 1000, firstSpeak: 500 };
+const LIMITS = {
+  preview: 3000,
+  chapter: 1000,
+  search: 500,
+  bookList: 1000,
+  bookListOld: 1000,
+  firstSpeak: 500,
+  editorOpen: 1000,
+  editorType: 100,
+  editorSave: 2000,
+};
 
 // 조건이 참이 된 뒤 화면이 한 번 그려질 때까지 기다리고, 시작부터 걸린 ms를 돌려준다.
 const waitPainted = (condition) => `
@@ -139,6 +149,69 @@ try {
     const first = speech.spoken[before];
     return { ms: first.at - start, paragraphs: buttons.length, text: first.text.slice(0, 40) };
   })()`);
+
+  // (g) 20만 자 장의 본문 편집 창 열기: 리더에서 "이 장 고치기"를 누른다.
+  await page.evaluate(() => (window.location.hash = '#/book/perf-0?chapter=ch7'));
+  await page.waitForFunction(() => document.querySelectorAll('.nfr-paragraph').length > 100);
+  await page.waitForFunction(() => document.querySelectorAll('.nfr-paragraph mark').length >= 150);
+  results.editorOpen = await page.evaluate(`(async () => {
+    const button = Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === '이 장 고치기');
+    const start = performance.now();
+    button.click();
+    const end = await ${waitPainted("document.querySelector('.nfr-chapter-body') && document.querySelector('.nfr-chapter-body').value.length > 150000")};
+    return { ms: end - start, chars: document.querySelector('.nfr-chapter-body').value.length };
+  })()`);
+
+  // (h) 그 편집 창에 글자 하나를 넣고 화면에 반영되기까지. 실제 키 입력으로 다섯 번 재고 가장 느린 것을 본다.
+  await page.evaluate(() => {
+    const textarea = document.querySelector('.nfr-chapter-body');
+    const middle = textarea.value.indexOf(' ', Math.floor(textarea.value.length / 2));
+    textarea.focus();
+    textarea.setSelectionRange(middle, middle);
+    window.__typed = [];
+    let start = 0;
+    textarea.addEventListener('keydown', () => (start = performance.now()), true);
+    textarea.addEventListener('input', () => {
+      const from = start;
+      requestAnimationFrame(() => requestAnimationFrame(() => window.__typed.push(performance.now() - from)));
+    });
+  });
+  for (const key of ['x', 'y', 'z', 'Backspace', 'Backspace']) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(250);
+  }
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(400);
+  results.editorType = await page.evaluate(() => ({
+    ms: Math.max(...window.__typed),
+    all: window.__typed.map((n) => Math.round(n)),
+    summary: document.querySelector('.nfr-edit-summary').textContent,
+  }));
+
+  // (i) 메모 200개가 붙은 그 장에서 낱말 하나를 고치고 저장 → 저장이 끝나 리더가 다시 그려지기까지.
+  results.editorSave = await page.evaluate(`(async () => {
+    const textarea = document.querySelector('.nfr-chapter-body');
+    const at = textarea.value.indexOf(' ', Math.floor(textarea.value.length / 3)) + 1;
+    const end0 = textarea.value.indexOf(' ', at);
+    textarea.setRangeText('corrected', at, end0, 'end');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    const button = Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === '저장');
+    const start = performance.now();
+    button.click();
+    const end = await ${waitPainted("document.querySelector('dialog[open]') || (!document.querySelector('.nfr-chapter-body') && document.querySelectorAll('.nfr-paragraph').length > 100)")};
+    const dialog = !!document.querySelector('dialog[open]');
+    return { ms: end - start, dialog };
+  })()`);
+  const saved = await page.evaluate(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const area = window.nfStudyDev.area;
+    const body = (await area.get(['bookch:perf-0:ch7']))['bookch:perf-0:ch7'];
+    const keys = (await area.getKeys()).filter((k) => k.startsWith('memo:perf-edit-'));
+    const memos = Object.values(await area.get(keys));
+    const attached = memos.filter((m) => body[m.paragraphIndex] === m.contextText && m.contextText.slice(m.start, m.end) === m.quote).length;
+    return { corrected: body.some((p) => p.includes('corrected')), memos: memos.length, attached, marks: document.querySelectorAll('.nfr-paragraph mark').length };
+  });
+  results.editorSave = { ...results.editorSave, ...saved };
 } finally {
   await browser.close();
 }
@@ -150,6 +223,14 @@ const pass = {
   bookList: results.bookList.ms <= LIMITS.bookList && results.bookList.books === 20,
   bookListOld: results.bookListOld.ms <= LIMITS.bookListOld && results.bookListOld.books === 20,
   firstSpeak: results.firstSpeak.ms <= LIMITS.firstSpeak,
+  editorOpen: results.editorOpen.ms <= LIMITS.editorOpen && results.editorOpen.chars > 150000,
+  editorType: results.editorType.ms <= LIMITS.editorType,
+  // 낱말 하나를 고친 저장은 확인 창 없이 끝나고, 메모는 199개 넘게 붙어 있어야 한다(고친 낱말을 고른 메모는 고른 글이 바뀐다).
+  editorSave:
+    results.editorSave.ms <= LIMITS.editorSave &&
+    results.editorSave.corrected &&
+    results.editorSave.memos === 200 &&
+    results.editorSave.attached === 200,
 };
 console.log(JSON.stringify({ results, limitsMs: LIMITS, pass }, null, 2));
 process.exit(Object.values(pass).every(Boolean) ? 0 : 1);

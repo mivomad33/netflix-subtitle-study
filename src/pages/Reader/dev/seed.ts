@@ -1,7 +1,7 @@
 import { Memo } from '../../../shared/memo/types';
 import { StorageArea } from '../../../shared/storage/storageArea';
 import { KEY } from '../../../shared/storage/keys';
-import { saveBook, setChapterDone, setPosition } from '../../../shared/storage/repo';
+import { getChapterParagraphs, saveBook, setChapterDone, setPosition } from '../../../shared/storage/repo';
 
 // 개발 화면용 테스트 데이터. 글은 모두 직접 쓴 문장이다(실제 원서·자막·메모를 넣지 않는다, 4.9-1).
 
@@ -172,5 +172,26 @@ export async function seedPerf(area: StorageArea) {
     });
     items[KEY.memo(m.id)] = m;
   }
+  // 본문 편집 성능 측정용: 큰 책의 7장(20만 자)에 붙은 메모 200개(book-edit 4.3-14).
+  const body = await getChapterParagraphs(area, PERF_EDIT.bookId, PERF_EDIT.chapterId);
+  for (let i = 0; i < PERF_EDIT.memos; i++) {
+    const paragraphIndex = (i * 7) % body.length;
+    const contextText = body[paragraphIndex];
+    const quote = contextText.split(' ').slice(2 + (i % 5), 4 + (i % 5)).join(' ');
+    const m = memo({
+      id: `perf-edit-m${i}`,
+      kind: 'book',
+      sourceId: PERF_EDIT.bookId,
+      chapterId: PERF_EDIT.chapterId,
+      paragraphIndex,
+      contextText,
+      quote,
+      note: i % 4 === 0 ? `edit note ${i}` : '',
+      updatedAt: now - i,
+    });
+    items[KEY.memo(m.id)] = m;
+  }
   await area.set(items);
 }
+
+export const PERF_EDIT = { bookId: 'perf-0', chapterId: 'ch7', memos: 200 };

@@ -387,3 +387,85 @@ describe('4.8-1 4.8-2 backup format 2 with Netflix records', () => {
     expect(after[NETFLIX_KEY.itemsPerPage('v1')]).toBe(30);
   });
 });
+
+// 원서 고치기(명세서 book-edit 4.7-2)
+describe('book-edit 4.7-2 backups around a chapter edit', () => {
+  const CH1 = ['The lamp glowed over a quiet desk.', 'A cat slept beside teh warm window.'];
+  const CH2 = ['Two begins with a walk by the river.'];
+  const FIXED = ['A new first line.', CH1[0], 'A cat slept beside the warm window.'];
+
+  const setup = async () => {
+    const { saveBook, putMemo } = await import('../../../shared/storage/repo');
+    const area = createMemoryArea();
+    await saveBook(area, { id: 'bk1', title: 'Lamp', author: '', createdAt: 1, updatedAt: 1 }, [
+      { id: 'ch1', title: 'One', paragraphs: CH1 },
+      { id: 'ch2', title: 'Two', paragraphs: CH2 },
+    ]);
+    const start = CH1[1].indexOf('teh warm');
+    await putMemo(
+      area,
+      bookMemo({ id: 'm1', sourceId: 'bk1', chapterId: 'ch1', paragraphIndex: 1, contextText: CH1[1], start, end: start + 8, quote: 'teh warm' })
+    );
+    const river = CH2[0].indexOf('river');
+    await putMemo(
+      area,
+      bookMemo({ id: 'm2', sourceId: 'bk1', chapterId: 'ch2', paragraphIndex: 0, contextText: CH2[0], start: river, end: river + 5, quote: 'river' })
+    );
+    return area;
+  };
+  const backupOf = async (area: StorageArea) => {
+    const parsed = parseBackup((await exportBackup(area)).json);
+    if (!parsed.ok) throw new Error('backup did not parse');
+    return parsed.backup;
+  };
+  const attachedMemos = async (area: StorageArea) => {
+    const { listMemos, getChapterParagraphs } = await import('../../../shared/storage/repo');
+    const { isBookMemoAnchored } = await import('./bookMemos');
+    const result: Record<string, boolean> = {};
+    for (const m of await listMemos(area)) {
+      result[m.id] = isBookMemoAnchored(m, await getChapterParagraphs(area, 'bk1', m.chapterId!));
+    }
+    return result;
+  };
+
+  it('a backup taken after the edit brings the edited body and attached memos into the earlier state', async () => {
+    const { saveChapterBody } = await import('./bookEdit');
+    const { getChapterParagraphs } = await import('../../../shared/storage/repo');
+    const old = await setup();
+    const edited = await setup();
+    await saveChapterBody(edited, { bookId: 'bk1', chapterId: 'ch1', original: CH1, after: FIXED });
+    const file = await backupOf(edited);
+    expect(file.data[KEY.chapter('bk1', 'ch1')]).toEqual(FIXED);
+
+    await mergeBackup(old, file);
+    expect(await getChapterParagraphs(old, 'bk1', 'ch1')).toEqual(FIXED);
+    expect(await attachedMemos(old)).toEqual({ m1: true, m2: true });
+  });
+
+  it('a backup taken before the edit leaves the edited body and memos as they are', async () => {
+    const { saveChapterBody } = await import('./bookEdit');
+    const { getChapterParagraphs } = await import('../../../shared/storage/repo');
+    const area = await setup();
+    const file = await backupOf(area);
+    await saveChapterBody(area, { bookId: 'bk1', chapterId: 'ch1', original: CH1, after: FIXED });
+    const before = JSON.stringify(await area.get(await area.getKeys()));
+
+    await mergeBackup(area, file);
+    expect(await getChapterParagraphs(area, 'bk1', 'ch1')).toEqual(FIXED);
+    expect(await attachedMemos(area)).toEqual({ m1: true, m2: true });
+    expect(JSON.stringify(await area.get(await area.getKeys()))).toBe(before);
+  });
+
+  it('an older backup does not bring a deleted chapter back into the chapter list', async () => {
+    const { deleteChapter } = await import('./bookEdit');
+    const { getBook, listMemos } = await import('../../../shared/storage/repo');
+    const area = await setup();
+    const file = await backupOf(area);
+    await deleteChapter(area, (await getBook(area, 'bk1'))!, 'ch2', { deleteMemos: true });
+
+    await mergeBackup(area, file);
+    expect((await getBook(area, 'bk1'))!.chapters.map((c) => c.id)).toEqual(['ch1']);
+    // 지운 장의 메모가 옛 백업에 있으면 떨어진 메모로 들어온다(받아들이는 동작).
+    expect((await listMemos(area)).map((m) => m.id).sort()).toEqual(['m1', 'm2']);
+  });
+});
