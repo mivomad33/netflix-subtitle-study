@@ -1123,3 +1123,165 @@ body {
   color: var(--nfr-danger);
   font-size: 13px;
 }
+
+/* 책 편집과 장 본문 편집(명세서 book-edit 4.8-1) */
+.nfr-edit-book {
+  margin-top: 10px;
+}
+.nfr-edit-notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-surface-soft);
+  font-size: 13px;
+}
+.nfr-edit-heading {
+  margin: 16px 0 6px;
+  font-size: 16px;
+}
+.nfr-edit-help {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.nfr-edit-status {
+  min-height: 20px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.nfr-edit-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.nfr-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.nfr-edit-num {
+  min-width: 24px;
+  color: var(--nfr-text-muted);
+  font-size: 13px;
+  text-align: right;
+}
+.nfr-edit-title {
+  display: grid;
+  gap: 4px;
+  font-weight: 400;
+}
+.nfr-edit-row-title {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.nfr-edit-count {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.nfr-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nfr-edit-add {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.nfr-edit-add .nfr-edit-heading {
+  margin: 0;
+}
+.nfr-chapter-edit {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.nfr-find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--nfr-border);
+  border-radius: var(--nfr-radius);
+  background: var(--nfr-surface);
+}
+.nfr-find-field {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nfr-text-button);
+}
+.nfr-find .nfr-check {
+  min-height: 36px;
+}
+.nfr-find-status {
+  min-width: 90px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--nfr-text-muted);
+}
+.nfr-chapter-body {
+  display: block;
+  height: calc(100vh - 380px);
+  min-height: 280px;
+  resize: vertical;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.nfr-chapter-edit-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.nfr-edit-summary {
+  font-size: 13px;
+  color: var(--nfr-text-button);
+}
+.nfr-edit-problem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.nfr-chapter-edit .nfr-error {
+  margin: 10px 0 0;
+}
+.nfr-lost-list {
+  display: grid;
+  gap: 6px;
+  max-height: 40vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.nfr-lost-list li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--nfr-note);
+  background: var(--nfr-note-bg);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.nfr-lost-quote {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.nfr-lost-note {
+  color: var(--nfr-text-muted);
+  overflow-wrap: anywhere;
+}

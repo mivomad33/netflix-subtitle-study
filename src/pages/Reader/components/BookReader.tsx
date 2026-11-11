@@ -14,7 +14,8 @@ import {
   setPosition,
   updateReaderSettings,
 } from '../../../shared/storage/repo';
-import { completionKeyPrefix } from '../../../shared/storage/keys';
+import { KEY, completionKeyPrefix } from '../../../shared/storage/keys';
+import { sameParagraphs } from '../../../shared/text/chapterEdit';
 import { bookProgress } from '../logic/progress';
 import { ProgressBar } from './ProgressBar';
 import { AnnotationEditor } from '../../../shared/ui/AnnotationEditor';
@@ -134,6 +135,8 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   const [done, setDone] = useState<Record<string, boolean>>({});
   const [charCounts, setCharCounts] = useState<Record<string, number> | null>(null);
   const [doneSaveFailed, setDoneSaveFailed] = useState<'list' | 'end' | null>(null);
+  // 보던 장이 다른 곳에서 지워졌을 때의 안내(book-edit 4.2-8).
+  const [chapterGone, setChapterGone] = useState(false);
   const [readSettings, setReadSettings] = useState<ReadAloudSettings>(() => readAloudSettings(DEFAULT_READER_SETTINGS));
   // 읽는 문장을 따라 스크롤하는지. 사용자가 직접 스크롤하면 멈춘다(4.3-3).
   const [following, setFollowing] = useState(true);
@@ -209,6 +212,44 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
       });
       if (Object.keys(updates).length > 0) setDone((prev) => ({ ...prev, ...updates }));
     });
+  }, [area, bookId]);
+
+  // 다른 탭·기기에서 책을 고치면(제목, 장 목록, 본문) 다시 읽는다(book-edit 4.2-8, 4.3-13).
+  const chapterIdRef = useRef<string | null>(null);
+  chapterIdRef.current = chapterId;
+  useEffect(() => {
+    let cancelled = false;
+    const bookKey = KEY.book(bookId);
+    const unsubscribe = area.onChanged((changes) => {
+      if (!(bookKey in changes)) return;
+      getBook(area, bookId)
+        .then(async (fresh) => {
+          if (cancelled) return;
+          if (!fresh) {
+            setBook('missing');
+            return;
+          }
+          setBook(fresh);
+          setCharCounts(Object.fromEntries(fresh.chapters.map((c) => [c.id, c.charCount ?? 0])));
+          const current = chapterIdRef.current;
+          if (!current) return;
+          if (!fresh.chapters.some((c) => c.id === current)) {
+            // 보던 장이 지워졌다. 첫 장을 보여 주고 알린다.
+            setChapterGone(true);
+            setEditingId(null);
+            setChapterId(fresh.chapters[0]?.id ?? null);
+            return;
+          }
+          const body = await getChapterParagraphs(area, bookId, current);
+          if (cancelled || chapterIdRef.current !== current) return;
+          setParagraphs((prev) => (prev && sameParagraphs(prev, body) ? prev : body));
+        })
+        .catch((e) => console.error('[NF-STUDY] Failed to reload book:', e));
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [area, bookId]);
 
   // 다른 탭·기기에서 바꾼 이 책의 메모를 반영한다(4.2-3). 고치는 중인 메모는 그대로 둔다.
@@ -307,8 +348,24 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     };
   }, [chapterId, paragraphs, savePosition]);
 
+  // 지금 보는 문단을 읽던 위치로 저장하고 이 장의 본문 편집 창을 연다(book-edit 4.3-1, 4.3-2).
+  const editChapter = async () => {
+    if (!chapterId) return;
+    const elements = articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph-index]');
+    const visible = elements && Array.from(elements).find((el) => el.getBoundingClientRect().bottom > HEADER_OFFSET);
+    const kept = positionRef.current && positionRef.current.chapterId === chapterId ? positionRef.current.index : 0;
+    const index = visible ? Number(visible.dataset.paragraphIndex) : kept;
+    try {
+      await setPosition(area, { bookId, chapterId, paragraphIndex: index, updatedAt: Date.now() });
+    } catch (e) {
+      console.error('[NF-STUDY] Failed to save position:', e);
+    }
+    navigate({ name: 'editChapter', bookId, chapterId, from: 'reader' });
+  };
+
   const openChapter = (id: string) => {
     if (id === chapterId) return;
+    setChapterGone(false);
     setEditingId(null);
     setChapterId(id);
     window.scrollTo?.({ top: 0 });
@@ -630,6 +687,9 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
         <h1 className="nfr-reader-book-title">{book.title}</h1>
         {book.author && <p className="nfr-muted">{book.author}</p>}
         {progress && <ProgressBar progress={progress} />}
+        <button type="button" className="nfr-btn nfr-edit-book" onClick={() => navigate({ name: 'edit', bookId })}>
+          책 편집
+        </button>
         {doneSaveFailed === 'list' && doneFailedNotice}
         <ol className="nfr-chapter-list">
           {book.chapters.map((c, i) => (
@@ -662,6 +722,9 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
             {chapterIndex + 1}/{book.chapters.length}장
           </span>
           <span className="nfr-spacer" />
+          <button type="button" className="nfr-btn" onClick={editChapter} disabled={!paragraphs}>
+            이 장 고치기
+          </button>
           <div className="nfr-font-controls" role="group" aria-label="글자 크기">
             <button type="button" className="nfr-btn" aria-label="글자 작게" onClick={() => changeFontSize(-1)} disabled={fontSize <= MIN_FONT}>
               가−
@@ -674,6 +737,11 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
             </button>
           </div>
         </div>
+        {chapterGone && (
+          <p className="nfr-edit-notice" role="status">
+            보던 장이 다른 곳에서 지워져 첫 장을 엽니다.
+          </p>
+        )}
         <div className="nfr-read-sticky" ref={readBarRef}>
           <ReadAloudBar
             supported={!!speaker}

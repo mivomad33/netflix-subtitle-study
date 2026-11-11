@@ -1,9 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StorageErrorCode } from '../../shared/storage/errors';
 import { Route, parseRoute, routeHash } from './route';
 import { BookList } from './components/BookList';
 import { BookImport } from './components/BookImport';
 import { BookReader } from './components/BookReader';
+import { BookEditor } from './components/BookEditor';
+import { ChapterEditor } from './components/ChapterEditor';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { LeaveGuardProvider } from './leaveGuard';
 import { MemoCollection } from './components/MemoCollection';
 import { BackupControls } from './components/BackupControls';
 import { StorageErrorNotice } from './components/StorageErrorNotice';
@@ -13,12 +17,27 @@ import { useAuthClient } from './account/AuthGate';
 import { AccountBar } from './account/AccountBar';
 import './Reader.css';
 
-export function useHashRoute(): [Route, (route: Route) => void] {
+// block이 참을 돌려주면 그 이동을 막고 주소를 지금 화면의 것으로 되돌린다.
+export function useHashRoute(
+  block?: (next: Route) => boolean
+): [Route, (route: Route) => void] {
   const [route, setRoute] = useState<Route>(() =>
     parseRoute(window.location.hash)
   );
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  const blockRef = useRef(block);
+  blockRef.current = block;
   useEffect(() => {
-    const handle = () => setRoute(parseRoute(window.location.hash));
+    const handle = () => {
+      const next = parseRoute(window.location.hash);
+      const current = routeHash(routeRef.current);
+      if (routeHash(next) !== current && blockRef.current?.(next)) {
+        window.location.hash = current;
+        return;
+      }
+      setRoute(next);
+    };
     window.addEventListener('hashchange', handle);
     return () => window.removeEventListener('hashchange', handle);
   }, []);
@@ -31,7 +50,22 @@ export function useHashRoute(): [Route, (route: Route) => void] {
 }
 
 const App: React.FC = () => {
-  const [route, navigate] = useHashRoute();
+  // 저장하지 않은 수정이 있으면 다른 화면으로 가기 전에 확인받는다.
+  const dirty = useRef(false);
+  const [pendingLeave, setPendingLeave] = useState<Route | null>(null);
+  const [route, navigate] = useHashRoute((next) => {
+    if (!dirty.current) return false;
+    setPendingLeave(next);
+    return true;
+  });
+  const leaveGuard = useMemo(
+    () => ({
+      setDirty(value: boolean) {
+        dirty.current = value;
+      },
+    }),
+    []
+  );
   // 백업을 가져오거나 오류 뒤 다시 시도하면 모든 화면이 저장소를 다시 읽게 한다.
   const [dataVersion, setDataVersion] = useState(0);
   const env = useReaderEnv();
@@ -50,12 +84,15 @@ const App: React.FC = () => {
         ? '메모 모아 보기'
         : route.name === 'import'
         ? '책 등록'
+        : route.name === 'edit' || route.name === 'editChapter'
+        ? '책 편집'
         : '원서 리더';
   }, [route.name]);
 
   const isMemos = route.name === 'memos';
   return (
     <ReaderEnvProvider env={appEnv}>
+      <LeaveGuardProvider value={leaveGuard}>
       <div className="nfr-app">
         <header className="nfr-header">
           <nav className="nfr-nav" aria-label="화면">
@@ -101,9 +138,48 @@ const App: React.FC = () => {
               navigate={navigate}
             />
           )}
+          {route.name === 'edit' && (
+            <BookEditor key={route.bookId} bookId={route.bookId} navigate={navigate} />
+          )}
+          {route.name === 'editChapter' && (
+            <ChapterEditor
+              key={`${route.bookId}:${route.chapterId}`}
+              bookId={route.bookId}
+              chapterId={route.chapterId}
+              from={route.from}
+              navigate={navigate}
+            />
+          )}
           {route.name === 'memos' && <MemoCollection navigate={navigate} />}
         </main>
+        <ConfirmDialog
+          open={pendingLeave !== null}
+          title="저장하지 않은 수정이 있습니다"
+          onClose={() => setPendingLeave(null)}
+          actions={
+            <>
+              <button type="button" className="nfr-btn" autoFocus onClick={() => setPendingLeave(null)}>
+                계속 고치기
+              </button>
+              <button
+                type="button"
+                className="nfr-btn nfr-btn-danger"
+                onClick={() => {
+                  const next = pendingLeave;
+                  dirty.current = false;
+                  setPendingLeave(null);
+                  if (next) navigate(next);
+                }}
+              >
+                저장하지 않고 나가기
+              </button>
+            </>
+          }
+        >
+          <p>지금 나가면 고친 내용이 사라집니다. 나갈까요?</p>
+        </ConfirmDialog>
       </div>
+      </LeaveGuardProvider>
     </ReaderEnvProvider>
   );
 };
