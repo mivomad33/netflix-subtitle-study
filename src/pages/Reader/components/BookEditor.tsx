@@ -45,7 +45,10 @@ const TitleField: React.FC<{
   // 저장된 값이 바뀌면(저장 성공, 다른 곳에서 바뀜) 입력칸도 맞춘다. 그 사이 사용자가 더 고친 글은 덮지 않는다.
   useEffect(() => {
     if (saved.current === value) return;
-    const untouched = draftRef.current === saved.current || draftRef.current.trim() === sent.current;
+    // 입력칸이 저장된 값 그대로이거나, 방금 끝난 저장이 입력칸의 글을 저장한 것일 때만 맞춘다.
+    // 앞선 저장이 끝났을 뿐이고 입력칸에는 그 뒤에 맡긴 글이 있으면 그대로 둔다(뒤 저장이 실패해도 글이 남는다).
+    const untouched =
+      draftRef.current === saved.current || (sent.current === value && draftRef.current.trim() === value);
     saved.current = value;
     if (sent.current === value) sent.current = null;
     if (untouched) {

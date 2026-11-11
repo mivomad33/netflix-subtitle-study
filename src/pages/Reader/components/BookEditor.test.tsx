@@ -321,6 +321,40 @@ describe('book-edit 4.1 책 편집 화면', () => {
     await waitFor(async () => expect((await getBook(inner, 'bk1'))!.chapters[0].title).toBe('First Night'));
   });
 
+  it('4.1-5 이어서 저장한 둘째 제목이 실패해도 입력한 둘째 값이 화면에 남는다', async () => {
+    const inner = createMemoryArea();
+    await seed(inner);
+    let calls = 0;
+    let release: (() => void) | null = null;
+    const area: StorageArea = {
+      ...inner,
+      set: async (items) => {
+        calls += 1;
+        if (calls === 1) await new Promise<void>((resolve) => (release = resolve));
+        if (calls === 2) {
+          // 둘째 저장은 첫째의 결과가 화면에 그려진 뒤에 실패한다(네트워크 오류처럼).
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          throw new Error('unavailable');
+        }
+        return inner.set(items);
+      },
+    };
+    renderApp(area, '#/book/bk1/edit');
+    const first = (await screen.findByRole('textbox', { name: '1번째 장 제목' })) as HTMLInputElement;
+    fireEvent.change(first, { target: { value: 'Alpha' } });
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await waitFor(() => expect(release).not.toBeNull());
+    fireEvent.change(first, { target: { value: 'Beta' } });
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await act(async () => {
+      release!();
+    });
+    expect(await screen.findByText('저장하지 못했습니다. 다시 시도해 주세요.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('저장하는 중입니다…')).toBeNull());
+    expect((await getBook(inner, 'bk1'))!.chapters[0].title).toBe('Alpha');
+    expect(first.value).toBe('Beta');
+  });
+
   it('4.1-5 저장하는 동안 원래 제목으로 되돌려 다시 저장하면 원래 제목이 남는다', async () => {
     const inner = createMemoryArea();
     await seed(inner);

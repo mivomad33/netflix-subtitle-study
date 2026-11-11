@@ -383,7 +383,9 @@ export function createFirestoreArea(db: Firestore, uid: string, options: Firesto
         const kept = pending.filter((s) => !collectable(s));
         if (dropped.length > 0) drop.set(id, dropped);
         keep.set(id, kept);
-        const rest = [...dropped, ...kept];
+        // 버리기로 한 묶음은 쓰기 시작 시각(t)을 떼고 적는다. 다시 지금 판이 될 일이 없으므로,
+        // 정리가 끝나지 못해도 다음 쓰기가 유예 없이 치울 수 있다.
+        const rest = [...dropped.map(({ t: _started, ...s }) => s), ...kept];
         if (set) flip.set(id, rest.length > 0 ? { ...set, p: rest } : set);
         else flip.set(id, rest.length > 0 ? { p: rest } : undefined);
       });
