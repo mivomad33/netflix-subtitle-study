@@ -5,6 +5,9 @@ export interface ChapterDraft {
   paragraphs: string[];
 }
 
+// 한 권에 넣을 수 있는 본문 글자 수.
+export const MAX_BOOK_CHARS = 2_000_000;
+
 const MAX_HEADING_LENGTH = 80;
 
 // 1~399. M, D 를 빼서 "mix", "dim" 같은 낱말이 로마 숫자로 잡히지 않게 한다.

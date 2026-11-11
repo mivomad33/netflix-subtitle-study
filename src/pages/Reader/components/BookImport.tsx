@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { createId } from '../../../shared/memo/types';
 import { saveBook } from '../../../shared/storage/repo';
 import {
+  MAX_BOOK_CHARS,
   detectChapterStarts,
   normalizeChapterStarts,
   splitIntoChapters,
@@ -10,7 +11,7 @@ import {
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
 
-export const MAX_BOOK_CHARS = 2_000_000;
+export { MAX_BOOK_CHARS };
 
 interface Preview {
   paragraphs: string[];
