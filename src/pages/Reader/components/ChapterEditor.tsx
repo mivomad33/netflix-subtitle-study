@@ -24,16 +24,29 @@ export const summaryText = (before: string[], after: string[]) =>
 export const shrinksTooMuch = (beforeChars: number, afterChars: number) =>
   beforeChars > 0 && (beforeChars - afterChars) * 10 > beforeChars;
 
+// 대소문자를 가리지 않고 견줄 때 쓰는 글. 길이가 원문과 같아야 찾은 위치를 원문에 그대로 쓸 수 있으므로,
+// 소문자로 바꾸면 길이가 달라지는 글자('İ' 등)는 바꾸지 않고 둔다.
+function fold(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.length === text.length) return lower;
+  let out = '';
+  for (const ch of text) {
+    const l = ch.toLowerCase();
+    out += l.length === ch.length ? l : ch;
+  }
+  return out;
+}
+
 // 글자 그대로 찾는다. from 이후의 첫 위치, 없으면 -1.
 function findFrom(text: string, needle: string, from: number, caseSensitive: boolean): number {
   if (!needle) return -1;
-  return caseSensitive ? text.indexOf(needle, from) : text.toLowerCase().indexOf(needle.toLowerCase(), from);
+  return caseSensitive ? text.indexOf(needle, from) : fold(text).indexOf(fold(needle), from);
 }
 
 export function countMatches(text: string, needle: string, caseSensitive: boolean): number {
   if (!needle) return 0;
-  const hay = caseSensitive ? text : text.toLowerCase();
-  const pin = caseSensitive ? needle : needle.toLowerCase();
+  const hay = caseSensitive ? text : fold(text);
+  const pin = caseSensitive ? needle : fold(needle);
   let n = 0;
   for (let at = hay.indexOf(pin); at >= 0; at = hay.indexOf(pin, at + pin.length)) n++;
   return n;
@@ -42,8 +55,8 @@ export function countMatches(text: string, needle: string, caseSensitive: boolea
 // 모두 바꾼 글과 바꾼 개수. 바꿀 글은 글자 그대로 넣는다($1 같은 글도 그대로).
 export function replaceAll(text: string, needle: string, replacement: string, caseSensitive: boolean): { text: string; count: number } {
   if (!needle) return { text, count: 0 };
-  const hay = caseSensitive ? text : text.toLowerCase();
-  const pin = caseSensitive ? needle : needle.toLowerCase();
+  const hay = caseSensitive ? text : fold(text);
+  const pin = caseSensitive ? needle : fold(needle);
   let out = '';
   let last = 0;
   let count = 0;
@@ -227,7 +240,7 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
 
   const selectionIsMatch = (textarea: HTMLTextAreaElement) => {
     const chosen = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd);
-    return caseSensitive ? chosen === needle : chosen.toLowerCase() === needle.toLowerCase();
+    return caseSensitive ? chosen === needle : fold(chosen) === fold(needle);
   };
 
   const replaceOne = () => {

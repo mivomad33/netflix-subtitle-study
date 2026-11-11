@@ -14,6 +14,8 @@ import {
   setPosition,
 } from '../../../shared/storage/repo';
 import { StorageArea, createMemoryArea } from '../../../shared/storage/storageArea';
+import { StorageError } from '../../../shared/storage/errors';
+import { storageErrorMessage } from '../../../shared/ui/storageErrors';
 import { bookMemo } from '../../../shared/storage/testFixtures';
 import { MAX_BOOK_CHARS } from '../../../shared/text/bookText';
 import { editorText } from '../../../shared/text/chapterEdit';
@@ -377,6 +379,56 @@ describe('book-edit 4.3 장 본문 편집 창', () => {
     await screen.findByRole('navigation', { name: '장 목록' });
     expect((await getChapterParagraphs(area, 'bk1', 'ch1'))[1]).toBe('A cat slept beside the warm window.');
   });
+
+  it('4.3-9 저장 실패 뒤 위쪽 안내의 "다시 시도"를 눌러도 고친 글이 남는다', async () => {
+    const { area, state } = countingArea(createMemoryArea());
+    await seed(area);
+    renderApp(area, EDIT_CH1);
+    const textarea = await body();
+    const fixed = fixTypo(textarea.value);
+    type(textarea, fixed);
+    state.fail = true;
+    save();
+    await screen.findByText(/저장하지 못했습니다. 고친 글은 화면에 남아 있습니다/);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    // 편집 창이 다시 만들어지지 않고 고친 글이 그대로다.
+    expect(screen.getByRole('textbox', { name: '장 본문' })).toBe(textarea);
+    expect(textarea.value).toBe(fixed);
+    state.fail = false;
+    save();
+    await screen.findByRole('navigation', { name: '장 목록' });
+    expect((await getChapterParagraphs(area, 'bk1', 'ch1'))[1]).toBe('A cat slept beside the warm window.');
+  });
+
+  it('4.3-6 소문자로 바꾸면 길이가 달라지는 글자가 있어도 찾은 위치가 밀리지 않는다', () => {
+    // 'İ'는 소문자로 바꾸면 두 글자가 된다.
+    const text = 'İx Teh and teh';
+    expect(countMatches(text, 'teh', false)).toBe(2);
+    expect(replaceAll(text, 'teh', 'the', false)).toEqual({ text: 'İx the and the', count: 2 });
+  });
+
+  it.each(['unavailable', 'resource-exhausted', 'permission-denied', 'unauthenticated', 'quota-exceeded'] as const)(
+    '4.7-3, 4.3-8 저장이 %s 오류로 실패하면 그 종류의 안내가 보이고 고친 글이 남는다',
+    async (errorCode) => {
+      const inner = createMemoryArea();
+      await seed(inner);
+      const area: StorageArea = {
+        ...inner,
+        set: async () => {
+          throw new StorageError(errorCode);
+        },
+      };
+      renderApp(area, EDIT_CH1);
+      const textarea = await body();
+      const fixed = fixTypo(textarea.value);
+      type(textarea, fixed);
+      save();
+      expect(await screen.findByText(storageErrorMessage(errorCode))).toBeInTheDocument();
+      expect(screen.getByText(/저장하지 못했습니다. 고친 글은 화면에 남아 있습니다/)).toBeInTheDocument();
+      expect(textarea.value).toBe(fixed);
+      expect(await getChapterParagraphs(inner, 'bk1', 'ch1')).toEqual(CH1);
+    }
+  );
 
   it('4.3-11 저장하지 않은 수정이 있으면 나가기 전에 확인받고, 없으면 바로 나간다', async () => {
     const area = createMemoryArea();

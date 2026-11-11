@@ -219,14 +219,21 @@ export async function deleteChapter(
     const moved: ReadingPosition = { bookId: fresh.id, chapterId: next.id, paragraphIndex: 0, updatedAt: now };
     extra[KEY.position(fresh.id)] = moved;
   }
-  const removed = [KEY.chapter(fresh.id, chapterId), KEY.completion(fresh.id, chapterId)];
+  // 어디서 실패해도 장이 온전히 목록에 있거나 온전히 없게, 세 번에 나눠 쓴다.
+  // 1. 메모를 지운다. 여기서 실패하면 아무것도 바뀌지 않았고, 그 뒤에 실패하면 장이 목록에 남아 있어 다시 지울 수 있다.
   if (options.deleteMemos) {
-    const memos = await listMemosBySource(area, 'book', fresh.id);
-    memosOfChapter(memos, fresh.id, chapterId).forEach((m) => removed.push(KEY.memo(m.id)));
+    const memos = memosOfChapter(await listMemosBySource(area, 'book', fresh.id), fresh.id, chapterId);
+    if (memos.length > 0) await area.remove(memos.map((m) => KEY.memo(m.id)));
   }
-  // 장 목록에서 먼저 빼고 본문·기록을 지운다. 둘째가 실패해도 장은 목록에 없고, 남은 본문은 책을 지울 때 함께 지워진다.
+  // 2. 장 목록에서 뺀다(읽던 위치와 함께). 이것이 되면 장은 지워진 것이다.
   await writeBook(area, book, extra);
-  await area.remove(removed);
+  // 3. 본문과 학습 완료 기록을 지운다. 실패해도 장은 이미 목록에 없으므로 오류로 올리지 않는다.
+  //    남은 본문과 기록은 어디에도 보이지 않고, 책을 지울 때 함께 지워진다(장 id는 다시 쓰지 않는다).
+  try {
+    await area.remove([KEY.chapter(fresh.id, chapterId), KEY.completion(fresh.id, chapterId)]);
+  } catch {
+    // 저장 오류 안내는 저장소 층이 화면 위쪽에 보인다.
+  }
   return book;
 }
 

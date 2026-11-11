@@ -13,6 +13,8 @@ import {
   setPosition,
 } from '../../../shared/storage/repo';
 import { StorageArea, createMemoryArea } from '../../../shared/storage/storageArea';
+import { StorageError } from '../../../shared/storage/errors';
+import { storageErrorMessage } from '../../../shared/ui/storageErrors';
 import { bookMemo } from '../../../shared/storage/testFixtures';
 import { ReaderEnvProvider } from '../env';
 import App from '../App';
@@ -229,6 +231,43 @@ describe('book-edit 4.1 책 편집 화면', () => {
     expect(title.value).toBe('Will not save');
     expect((await getBook(area, 'bk1'))!.title).toBe('New title!');
   });
+
+  it('4.1-5 제목을 고친 뒤 곧바로 누른 순서 버튼도 무시되지 않고 차례로 저장된다', async () => {
+    const area = createMemoryArea();
+    await seed(area);
+    renderApp(area, '#/book/bk1/edit');
+    const first = (await screen.findByRole('textbox', { name: '1번째 장 제목' })) as HTMLInputElement;
+    fireEvent.change(first, { target: { value: 'First Night' } });
+    // 입력칸을 벗어나며 저장이 시작된 직후, 기다리지 않고 다른 장의 순서 버튼을 누른다.
+    fireEvent.blur(first);
+    fireEvent.click(screen.getByRole('button', { name: '「Last Light」 위로' }));
+    await waitFor(async () =>
+      expect((await getBook(area, 'bk1'))!.chapters.map((c) => c.title)).toEqual(['First Night', 'Last Light', 'Second Wind'])
+    );
+    await waitFor(() => expect(chapterTitles()).toEqual(['First Night', 'Last Light', 'Second Wind']));
+    // 저장하는 동안에도 입력칸은 비활성이 되지 않는다(포커스를 잃지 않는다).
+    expect(first).toBeEnabled();
+  });
+
+  it.each(['unavailable', 'resource-exhausted', 'permission-denied', 'unauthenticated', 'quota-exceeded'] as const)(
+    '4.7-3 책 편집 화면의 저장이 %s 오류로 실패하면 그 종류의 안내가 보이고 화면이 저장소와 같다',
+    async (errorCode) => {
+      const inner = createMemoryArea();
+      await seed(inner);
+      const area: StorageArea = {
+        ...inner,
+        set: async () => {
+          throw new StorageError(errorCode);
+        },
+      };
+      renderApp(area, '#/book/bk1/edit');
+      fireEvent.click(await screen.findByRole('button', { name: '「Second Wind」 위로' }));
+      expect(await screen.findByText(storageErrorMessage(errorCode))).toBeInTheDocument();
+      expect(screen.getByText('저장하지 못했습니다. 다시 시도해 주세요.')).toBeInTheDocument();
+      expect(chapterTitles()).toEqual((await getBook(inner, 'bk1'))!.chapters.map((c) => c.title));
+      expect(chapterTitles()).toEqual(['Opening Night', 'Second Wind', 'Last Light']);
+    }
+  );
 
   it('4.1-6 다른 곳에서 책이 바뀐 뒤의 저장은 덮어쓰지 않고 다시 읽어 알린다', async () => {
     const area = createMemoryArea();

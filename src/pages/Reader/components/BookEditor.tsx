@@ -32,10 +32,9 @@ const TitleField: React.FC<{
   value: string;
   error: string;
   allowEmpty?: boolean;
-  disabled?: boolean;
   className?: string;
   onSave: (value: string) => Promise<boolean>;
-}> = ({ label, value, error, allowEmpty, disabled, className, onSave }) => {
+}> = ({ label, value, error, allowEmpty, className, onSave }) => {
   const [draft, setDraft] = useState(value);
   const [invalid, setInvalid] = useState(false);
   const saved = useRef(value);
@@ -71,7 +70,6 @@ const TitleField: React.FC<{
         aria-invalid={invalid}
         aria-describedby={invalid ? id : undefined}
         value={draft}
-        disabled={disabled}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -109,8 +107,11 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
   const [clean, setClean] = useState(true);
   const [addError, setAddError] = useState<string | null>(null);
   const bookRef = useRef<BookMeta | null>(null);
-  // 이 화면이 저장하는 동안 온 변경 알림은 자기 것이므로 "다른 곳에서 바뀜"으로 보지 않는다.
+  // 이 화면이 저장하는 동안 온 변경 알림은 자기 것일 수 있어 바로 반영하지 않고, 저장이 모두 끝난 뒤 한 번 다시 읽는다.
   const writing = useRef(false);
+  const missed = useRef(false);
+  const waiting = useRef(0);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
 
   const show = useCallback((next: BookMeta | null) => {
     bookRef.current = next;
@@ -136,7 +137,11 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
     // 다른 탭·기기에서 이 책이나 메모가 바뀌면 다시 읽는다(4.1-6).
     let timer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = area.onChanged((changes) => {
-      if (writing.current || !touches(changes, [KEY.book(bookId), PREFIX.memo])) return;
+      if (!touches(changes, [KEY.book(bookId), PREFIX.memo])) return;
+      if (writing.current) {
+        missed.current = true;
+        return;
+      }
       clearTimeout(timer);
       timer = setTimeout(() => {
         if (writing.current || cancelled) return;
@@ -167,14 +172,11 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
   }, [addDirty, guard]);
 
   // 저장 하나를 돌린다. 성공하면 true.
-  const run = async (action: (loaded: BookMeta) => Promise<BookMeta>, onError?: (message: string) => void): Promise<boolean> => {
+  const runOne = async (action: (loaded: BookMeta) => Promise<BookMeta>, fail: (message: string) => void): Promise<boolean> => {
     const loaded = bookRef.current;
-    if (!loaded || writing.current) return false;
-    writing.current = true;
-    setBusy(true);
+    if (!loaded) return false;
     setError(null);
     setNotice(null);
-    const fail = onError ?? setError;
     try {
       show(await action(loaded));
       return true;
@@ -201,13 +203,37 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
         fail(SAVE_FAILED);
       }
       return false;
-    } finally {
+    }
+  };
+
+  // 저장은 누른 차례대로 하나씩 한다. 앞의 저장이 끝나기 전에 누른 것도 버리지 않고, 앞의 결과(새 책 정보) 위에서 이어 한다.
+  // 그래서 저장하는 동안 입력칸과 버튼을 막지 않는다(제목을 고치고 곧바로 다른 버튼을 눌러도 된다).
+  const run = (action: (loaded: BookMeta) => Promise<BookMeta>, onError?: (message: string) => void): Promise<boolean> => {
+    waiting.current += 1;
+    writing.current = true;
+    setBusy(true);
+    const result = queue.current.then(() => runOne(action, onError ?? setError));
+    queue.current = result.then(async () => {
+      waiting.current -= 1;
+      if (waiting.current > 0) return;
       writing.current = false;
       setBusy(false);
-      listMemosBySource(area, 'book', bookId)
-        .then(setMemos)
-        .catch(() => {});
-    }
+      // 저장하는 동안 온 변경 알림은 건너뛰었으므로 한 번 다시 읽어 맞춘다.
+      try {
+        const fresh = await load();
+        if (writing.current) return;
+        const before = bookRef.current;
+        if (missed.current && before && (!fresh || fresh.updatedAt !== before.updatedAt)) {
+          if (fresh) setNotice(CHANGED_NOTICE);
+          show(fresh);
+        }
+      } catch {
+        // 다음 변경 알림이나 저장 때 다시 읽는다.
+      } finally {
+        missed.current = false;
+      }
+    });
+    return result;
   };
 
   if (book === 'missing') {
@@ -284,7 +310,6 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
             label="책 제목"
             value={book.title}
             error={TITLE_ERROR}
-            disabled={busy}
             onSave={(title) => run((loaded) => updateBookInfo(area, loaded, { title }))}
           />
         </label>
@@ -295,7 +320,6 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
             value={book.author}
             error={AUTHOR_ERROR}
             allowEmpty
-            disabled={busy}
             onSave={(author) => run((loaded) => updateBookInfo(area, loaded, { author }))}
           />
         </label>
@@ -324,7 +348,6 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
               label={`${index + 1}번째 장 제목`}
               value={chapter.title}
               error={TITLE_ERROR}
-              disabled={busy}
               onSave={(title) => run((loaded) => renameChapter(area, loaded, chapter.id, title))}
             />
             <span className="nfr-muted nfr-edit-count">문단 {chapter.paragraphCount.toLocaleString('ko-KR')}개</span>
@@ -334,7 +357,7 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
                 className="nfr-btn nfr-edit-move"
                 aria-label={`「${chapter.title}」 위로`}
                 title="위로"
-                disabled={busy || index === 0}
+                disabled={index === 0}
                 onClick={() => run((loaded) => moveChapter(area, loaded, chapter.id, -1))}
               >
                 ↑
@@ -344,7 +367,7 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
                 className="nfr-btn nfr-edit-move"
                 aria-label={`「${chapter.title}」 아래로`}
                 title="아래로"
-                disabled={busy || index === book.chapters.length - 1}
+                disabled={index === book.chapters.length - 1}
                 onClick={() => run((loaded) => moveChapter(area, loaded, chapter.id, 1))}
               >
                 ↓
@@ -361,7 +384,7 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
                 type="button"
                 className="nfr-btn nfr-btn-danger"
                 aria-label={`「${chapter.title}」 지우기`}
-                disabled={busy || only}
+                disabled={only}
                 onClick={() => setDeleting(chapter.id)}
               >
                 지우기

@@ -483,6 +483,34 @@ describe('4.3-9 book-edit: chapters stored in the earlier chunk layout', () => {
   });
 });
 
+describe('4.2-5 book-edit: chunks of a deleted chapter whose cleanup did not finish', () => {
+  it('are removed, with their record, by the next chapter write', async () => {
+    const client = await signedInClient('deleted-leftover');
+    clients.push(client);
+    // 지운 장의 조각 정리가 실패한 뒤의 모양: 지금 판 없이 지울 조각 기록(p)만 남은 항목과 그 조각 문서.
+    const gone = encodeId('lo:gone');
+    await setDoc(doc(client.db, 'users', client.uid, 'ch', `${gone}~old1~0`), { t: '["Left behind."]', i: 0, n: 1, v: 'old1' });
+    await setDoc(doc(client.db, 'users', client.uid, 'kv', 'chsizes'), {
+      e: { [gone]: { p: [{ n: 1, v: 'old1', bytes: 400, l: 2 }] } },
+    });
+    const area = createFirestoreArea(client.db, client.uid);
+    areas.push(area);
+    await area.ready();
+    expect(await area.getKeys()).not.toContain(KEY.chapter('lo', 'gone'));
+    expect(await area.usage()).toBeGreaterThanOrEqual(400);
+
+    // 다른 장을 쓰면 남은 조각과 기록이 함께 치워진다.
+    await area.set({ [KEY.chapter('lo', 'c1')]: ['A new chapter body.'] });
+    const ids = await chunkIds(client);
+    expect(ids).toHaveLength(1);
+    expect(ids[0].startsWith(`${encodeId('lo:c1')}~`)).toBe(true);
+    const other = await open('deleted-leftover');
+    const index = (await getDoc(doc(client.db, 'users', client.uid, 'kv', 'chsizes'))).get('e') as Record<string, unknown>;
+    expect(Object.keys(index)).toEqual([encodeId('lo:c1')]);
+    expect(await getChapterParagraphs(other.area, 'lo', 'c1')).toEqual(['A new chapter body.']);
+  });
+});
+
 describe('4.2-5 book-edit: deleting one chapter', () => {
   it('removes every chunk of that chapter, also those a failed save left, and keeps other chapters and the same chapter id of another book', async () => {
     const sub = 'delete-chapter';

@@ -163,13 +163,46 @@ try {
   await page.evaluate(() => (window.location.hash = '#/book/perf-0?chapter=ch7'));
   await page.waitForFunction(() => document.querySelectorAll('.nfr-paragraph').length > 100);
   await page.waitForFunction(() => document.querySelectorAll('.nfr-paragraph mark').length >= 150);
+  // 장 가운데의 문단까지 내려가 읽던 위치로 저장되게 한다(4.3-2: 편집 창은 그 문단에서 열린다).
+  const readingAt = await page.evaluate(async () => {
+    const target = document.querySelector('[data-paragraph-index="200"]');
+    target.scrollIntoView({ block: 'start' });
+    window.scrollBy(0, -60);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    // 리더가 읽던 위치로 보는 문단: 머리글(72px) 아래에 걸친 첫 문단.
+    const top = Array.from(document.querySelectorAll('[data-paragraph-index]')).find((el) => el.getBoundingClientRect().bottom > 72);
+    return { paragraph: Number(top.dataset.paragraphIndex), text: top.querySelector('p').textContent.slice(0, 60) };
+  });
   results.editorOpen = await page.evaluate(`(async () => {
     const button = Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === '이 장 고치기');
     const start = performance.now();
     button.click();
     const end = await ${waitPainted("document.querySelector('.nfr-chapter-body') && document.querySelector('.nfr-chapter-body').value.length > 150000")};
-    return { ms: end - start, chars: document.querySelector('.nfr-chapter-body').value.length };
+    const textarea = document.querySelector('.nfr-chapter-body');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // 커서가 있는 줄이 입력칸의 보이는 범위 안에 있는지: 커서 앞의 글만 넣은 같은 폭의 사본 높이로 잰다.
+    const style = getComputedStyle(textarea);
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre-wrap;overflow-wrap:break-word;box-sizing:border-box;';
+    for (const name of ['font', 'lineHeight', 'padding', 'border', 'letterSpacing']) probe.style[name] = style[name];
+    probe.style.width = textarea.clientWidth + 'px';
+    probe.textContent = textarea.value.slice(0, textarea.selectionStart) + 'x';
+    document.body.appendChild(probe);
+    const caretTop = probe.offsetHeight;
+    probe.remove();
+    return {
+      ms: end - start,
+      chars: textarea.value.length,
+      caretText: textarea.value.slice(textarea.selectionStart, textarea.selectionStart + 60),
+      scrollTop: Math.round(textarea.scrollTop),
+      caretTop,
+      viewHeight: textarea.clientHeight,
+      caretVisible: caretTop >= textarea.scrollTop && caretTop <= textarea.scrollTop + textarea.clientHeight + 30,
+      focused: document.activeElement === textarea,
+    };
   })()`);
+  results.editorOpen.readingAt = readingAt;
+  await page.screenshot({ path: process.env.NF_PERF_SHOT || '/dev/null' }).catch(() => {});
 
   step('editorType');
   // (h) 그 편집 창에 글자 하나를 넣고 화면에 반영되기까지. 실제 키 입력으로 다섯 번 재고 가장 느린 것을 본다.
@@ -238,7 +271,14 @@ const pass = {
   bookList: results.bookList.ms <= LIMITS.bookList && results.bookList.books === 20,
   bookListOld: results.bookListOld.ms <= LIMITS.bookListOld && results.bookListOld.books === 20,
   firstSpeak: results.firstSpeak.ms <= LIMITS.firstSpeak,
-  editorOpen: results.editorOpen.ms <= LIMITS.editorOpen && results.editorOpen.chars > 150000,
+  // 읽던 문단(200번째)에서 열리고 그 문단이 입력칸에 보여야 한다.
+  editorOpen:
+    results.editorOpen.ms <= LIMITS.editorOpen &&
+    results.editorOpen.chars > 150000 &&
+    results.editorOpen.readingAt.paragraph > 150 &&
+    results.editorOpen.caretText.startsWith(results.editorOpen.readingAt.text.slice(0, 40)) &&
+    results.editorOpen.scrollTop > 0 &&
+    results.editorOpen.caretVisible,
   editorType: results.editorType.ms <= LIMITS.editorType,
   // 낱말 하나를 고친 저장은 확인 창 없이 끝나고, 메모는 199개 넘게 붙어 있어야 한다(고친 낱말을 고른 메모는 고른 글이 바뀐다).
   editorSave:

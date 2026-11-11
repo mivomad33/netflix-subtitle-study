@@ -58,6 +58,11 @@ const App: React.FC = () => {
     setPendingLeave(next);
     return true;
   });
+  // 모든 화면이 저장소를 다시 읽게 한다. 저장하지 않은 수정이 있는 화면은 다시 만들지 않는다
+  // (고친 글이 사라진다). 그 화면은 저장할 때 저장소의 지금 값과 맞춰 본다.
+  const reload = useCallback(() => {
+    if (!dirty.current) setDataVersion((v) => v + 1);
+  }, []);
   // 탭을 닫거나 새로 고칠 때는 브라우저가 묻게 한다.
   useEffect(() => {
     const handle = (event: BeforeUnloadEvent) => {
@@ -121,7 +126,7 @@ const App: React.FC = () => {
               메모 모아 보기
             </a>
           </nav>
-          <BackupControls onImported={() => setDataVersion((v) => v + 1)} />
+          <BackupControls onImported={reload} />
           {auth && <AccountBar auth={auth} />}
         </header>
         {storageError && (
@@ -130,7 +135,7 @@ const App: React.FC = () => {
             onClose={() => setStorageError(null)}
             onRetry={() => {
               setStorageError(null);
-              setDataVersion((v) => v + 1);
+              reload();
             }}
           />
         )}

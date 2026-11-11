@@ -394,6 +394,16 @@ export function createFirestoreArea(db: Firestore, uid: string, options: Firesto
         await commitAll((add) => {
           const pending = new Map<string, ChunkSet[]>();
           const gone = new Map<string, unknown>();
+          // 전에 지운 장의 정리가 실패해 조각 기록만 남은 항목도 이때 함께 치운다(그 장은 다시 쓰이지 않는다).
+          Object.entries(index()).forEach(([id, entry]) => {
+            if (p.chapters.has(id) || currentSet(entry)) return;
+            const sets = pendingSets(entry);
+            if (sets.length === 0 || !sets.every(collectable)) return;
+            sets.forEach((s) => {
+              for (let i = 0; i < Math.min(s.n, MAX_CHUNKS); i++) add((b) => b.delete(doc(chRef, chunkDocId(id, s, i))), 100);
+            });
+            gone.set(id, undefined);
+          });
           drop.forEach((sets, id) => {
             sets.forEach((s) => {
               for (let i = 0; i < Math.min(s.n, MAX_CHUNKS); i++) add((b) => b.delete(doc(chRef, chunkDocId(id, s, i))), 100);

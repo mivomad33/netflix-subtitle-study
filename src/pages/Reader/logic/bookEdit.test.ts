@@ -224,6 +224,44 @@ describe('book-edit 4.2 adding and deleting chapters', () => {
     expect(removed.ids).toEqual(['m-ch1-0-lamp', 'nf', 'other-book']);
   });
 
+  it('4.2-5, 4.2-6 a failure while deleting leaves either the chapter fully listed or fully gone', async () => {
+    const make = async (failOn: number) => {
+      const area = createMemoryArea();
+      const book = await seed(area);
+      await putMemo(area, memoAt(CH2, 'ch2', 0, 'river'));
+      let calls = 0;
+      const flaky: StorageArea = {
+        ...area,
+        set: async (items) => {
+          if (++calls === failOn) throw new Error('unavailable');
+          return area.set(items);
+        },
+        remove: async (keys) => {
+          if (++calls === failOn) throw new Error('unavailable');
+          return area.remove(keys);
+        },
+      };
+      return { area, book, flaky };
+    };
+    // 첫 쓰기(메모 지우기)가 실패하면 아무것도 바뀌지 않아 다시 시도할 수 있다.
+    const first = await make(1);
+    await expect(deleteChapter(first.flaky, first.book, 'ch2', { deleteMemos: true })).rejects.toThrow();
+    expect(await getBook(first.area, 'bk1')).toEqual(first.book);
+    expect(await getChapterParagraphs(first.area, 'bk1', 'ch2')).toEqual(CH2);
+    expect((await listMemos(first.area)).length).toBe(1);
+    // 장 목록 쓰기가 실패하면 장은 그대로 목록에 있다(메모는 이미 지워졌고, 다시 지우면 된다).
+    const second = await make(2);
+    await expect(deleteChapter(second.flaky, second.book, 'ch2', { deleteMemos: true })).rejects.toThrow();
+    expect((await getBook(second.area, 'bk1'))!.chapters.map((c) => c.id)).toEqual(['ch1', 'ch2', 'ch3']);
+    expect(await getChapterParagraphs(second.area, 'bk1', 'ch2')).toEqual(CH2);
+    // 마지막 정리(본문·완료 지우기)가 실패해도 장은 지워진 것이고 함수는 새 책 정보를 돌려준다.
+    const third = await make(3);
+    const next = await deleteChapter(third.flaky, third.book, 'ch2', { deleteMemos: true });
+    expect(next.chapters.map((c) => c.id)).toEqual(['ch1', 'ch3']);
+    expect(await getBook(third.area, 'bk1')).toEqual(next);
+    expect(await listMemos(third.area)).toEqual([]);
+  });
+
   it('4.2-7 refuses to delete the only chapter', async () => {
     const area = createMemoryArea();
     await saveBook(area, { id: 'solo', title: 'Solo', author: '', createdAt: 1, updatedAt: 1 }, [
