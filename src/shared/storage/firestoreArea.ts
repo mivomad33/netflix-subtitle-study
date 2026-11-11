@@ -398,7 +398,8 @@ export function createFirestoreArea(db: Firestore, uid: string, options: Firesto
           Object.entries(index()).forEach(([id, entry]) => {
             if (p.chapters.has(id) || currentSet(entry)) return;
             const sets = pendingSets(entry);
-            if (sets.length === 0 || !sets.every(collectable)) return;
+            // 다른 기기가 새 장을 쓰다 만 기록(t가 있다)일 수 있는 것은 건드리지 않는다. 그런 것은 그 장을 쓰거나 지울 때만 치운다.
+            if (sets.length === 0 || !sets.every((s) => s.t === undefined || written.has(s.v))) return;
             sets.forEach((s) => {
               for (let i = 0; i < Math.min(s.n, MAX_CHUNKS); i++) add((b) => b.delete(doc(chRef, chunkDocId(id, s, i))), 100);
             });

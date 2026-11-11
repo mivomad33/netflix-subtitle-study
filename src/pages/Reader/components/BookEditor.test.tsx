@@ -269,6 +269,84 @@ describe('book-edit 4.1 책 편집 화면', () => {
     }
   );
 
+  it('4.1-5, 4.7-3 앞의 저장이 실패하면 안내가 남고, 그 뒤에 눌러 둔 동작은 하지 않는다', async () => {
+    const inner = createMemoryArea();
+    await seed(inner);
+    let calls = 0;
+    const area: StorageArea = {
+      ...inner,
+      set: async (items) => {
+        if (++calls === 1) throw new Error('unavailable');
+        return inner.set(items);
+      },
+    };
+    renderApp(area, '#/book/bk1/edit');
+    const first = (await screen.findByRole('textbox', { name: '1번째 장 제목' })) as HTMLInputElement;
+    fireEvent.change(first, { target: { value: 'First Night' } });
+    fireEvent.blur(first);
+    fireEvent.click(screen.getByRole('button', { name: '「Last Light」 위로' }));
+    expect(await screen.findByText('저장하지 못했습니다. 다시 시도해 주세요.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('저장하는 중입니다…')).toBeNull());
+    // 실패 안내가 지워지지 않고, 뒤에 눌러 둔 순서 바꾸기는 실행되지 않았다.
+    expect(screen.getByText('저장하지 못했습니다. 다시 시도해 주세요.')).toBeInTheDocument();
+    expect((await getBook(inner, 'bk1'))!.chapters.map((c) => c.title)).toEqual(['Opening Night', 'Second Wind', 'Last Light']);
+    expect(first.value).toBe('First Night');
+    expect(screen.queryByText(/다른 곳에서 책이 바뀌어/)).toBeNull();
+  });
+
+  it('4.1-5 저장하는 동안 같은 입력칸에 이어 친 글이 사라지지 않고 저장된다', async () => {
+    const inner = createMemoryArea();
+    await seed(inner);
+    let release: (() => void) | null = null;
+    const area: StorageArea = {
+      ...inner,
+      set: async (items) => {
+        if (!release) await new Promise<void>((resolve) => (release = resolve));
+        return inner.set(items);
+      },
+    };
+    renderApp(area, '#/book/bk1/edit');
+    const first = (await screen.findByRole('textbox', { name: '1번째 장 제목' })) as HTMLInputElement;
+    fireEvent.change(first, { target: { value: 'First' } });
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await waitFor(() => expect(release).not.toBeNull());
+    // 저장이 끝나기 전에 이어 친다.
+    fireEvent.change(first, { target: { value: 'First Night' } });
+    await act(async () => {
+      release!();
+    });
+    await waitFor(async () => expect((await getBook(inner, 'bk1'))!.chapters[0].title).toBe('First'));
+    expect(first.value).toBe('First Night');
+    fireEvent.blur(first);
+    await waitFor(async () => expect((await getBook(inner, 'bk1'))!.chapters[0].title).toBe('First Night'));
+  });
+
+  it('4.1-5 저장하는 동안 원래 제목으로 되돌려 다시 저장하면 원래 제목이 남는다', async () => {
+    const inner = createMemoryArea();
+    await seed(inner);
+    let release: (() => void) | null = null;
+    const area: StorageArea = {
+      ...inner,
+      set: async (items) => {
+        if (!release) await new Promise<void>((resolve) => (release = resolve));
+        return inner.set(items);
+      },
+    };
+    renderApp(area, '#/book/bk1/edit');
+    const first = (await screen.findByRole('textbox', { name: '1번째 장 제목' })) as HTMLInputElement;
+    fireEvent.change(first, { target: { value: 'Wrong' } });
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await waitFor(() => expect(release).not.toBeNull());
+    fireEvent.change(first, { target: { value: 'Opening Night' } });
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await act(async () => {
+      release!();
+    });
+    await waitFor(() => expect(screen.queryByText('저장하는 중입니다…')).toBeNull());
+    await waitFor(async () => expect((await getBook(inner, 'bk1'))!.chapters[0].title).toBe('Opening Night'));
+    expect(first.value).toBe('Opening Night');
+  });
+
   it('4.1-6 다른 곳에서 책이 바뀐 뒤의 저장은 덮어쓰지 않고 다시 읽어 알린다', async () => {
     const area = createMemoryArea();
     await seed(area);

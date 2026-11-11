@@ -38,10 +38,17 @@ const TitleField: React.FC<{
   const [draft, setDraft] = useState(value);
   const [invalid, setInvalid] = useState(false);
   const saved = useRef(value);
-  // 저장된 값이 바뀌면(저장 성공, 다른 곳에서 바뀜) 입력칸도 맞춘다.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  // 저장을 맡겨 아직 끝나지 않은 값. 저장하는 동안에도 입력칸을 막지 않으므로, 그 사이 더 친 글과 구별한다.
+  const sent = useRef<string | null>(null);
+  // 저장된 값이 바뀌면(저장 성공, 다른 곳에서 바뀜) 입력칸도 맞춘다. 그 사이 사용자가 더 고친 글은 덮지 않는다.
   useEffect(() => {
-    if (saved.current !== value) {
-      saved.current = value;
+    if (saved.current === value) return;
+    const untouched = draftRef.current === saved.current || draftRef.current.trim() === sent.current;
+    saved.current = value;
+    if (sent.current === value) sent.current = null;
+    if (untouched) {
       setDraft(value);
       setInvalid(false);
     }
@@ -54,11 +61,14 @@ const TitleField: React.FC<{
       return;
     }
     setInvalid(false);
-    if (cleaned === value) {
-      setDraft(cleaned);
+    // 저장 중인 값이 있으면 그것과 견준다(저장 중에 원래 값으로 되돌린 것도 저장해야 한다).
+    if (cleaned === (sent.current ?? value)) {
+      if (sent.current === null) setDraft(cleaned);
       return;
     }
-    await onSave(cleaned);
+    sent.current = cleaned;
+    const ok = await onSave(cleaned);
+    if (!ok && sent.current === cleaned) sent.current = null;
   };
 
   const id = React.useId();
@@ -110,6 +120,8 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
   // 이 화면이 저장하는 동안 온 변경 알림은 자기 것일 수 있어 바로 반영하지 않고, 저장이 모두 끝난 뒤 한 번 다시 읽는다.
   const writing = useRef(false);
   const missed = useRef(false);
+  // 이어서 누른 저장들 가운데 하나가 실패했다. 그 뒤에 눌러 둔 것은 하지 않는다(실패를 모른 채 다음 것을 적용하지 않는다).
+  const failed = useRef(false);
   const waiting = useRef(0);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
 
@@ -174,13 +186,12 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
   // 저장 하나를 돌린다. 성공하면 true.
   const runOne = async (action: (loaded: BookMeta) => Promise<BookMeta>, fail: (message: string) => void): Promise<boolean> => {
     const loaded = bookRef.current;
-    if (!loaded) return false;
-    setError(null);
-    setNotice(null);
+    if (!loaded || failed.current) return false;
     try {
       show(await action(loaded));
       return true;
     } catch (e) {
+      failed.current = true;
       if (isBookEditError(e)) {
         if (e.code === 'book-changed' && e.detail.book) {
           show(e.detail.book);
@@ -209,6 +220,12 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
   // 저장은 누른 차례대로 하나씩 한다. 앞의 저장이 끝나기 전에 누른 것도 버리지 않고, 앞의 결과(새 책 정보) 위에서 이어 한다.
   // 그래서 저장하는 동안 입력칸과 버튼을 막지 않는다(제목을 고치고 곧바로 다른 버튼을 눌러도 된다).
   const run = (action: (loaded: BookMeta) => Promise<BookMeta>, onError?: (message: string) => void): Promise<boolean> => {
+    if (waiting.current === 0) {
+      // 새로 시작하는 저장이면 앞의 안내를 지운다. 이어서 누른 저장은 앞 저장의 안내를 지우지 않는다.
+      failed.current = false;
+      setError(null);
+      setNotice(null);
+    }
     waiting.current += 1;
     writing.current = true;
     setBusy(true);
@@ -224,7 +241,9 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
         if (writing.current) return;
         const before = bookRef.current;
         if (missed.current && before && (!fresh || fresh.updatedAt !== before.updatedAt)) {
-          if (fresh) setNotice(CHANGED_NOTICE);
+          // 저장이 실패로 끝났으면 실패 안내가 이미 있다. 반영됐는데 실패로 보고된 자기 쓰기일 수 있으므로
+          // "다른 곳에서 바뀜"이라고 하지 않고 저장소의 값만 다시 보인다.
+          if (fresh && !failed.current) setNotice(CHANGED_NOTICE);
           show(fresh);
         }
       } catch {
