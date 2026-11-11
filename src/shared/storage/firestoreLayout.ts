@@ -2,6 +2,7 @@
 //
 // users/{uid}/kv/{docId}   작은 데이터를 묶어 둔 문서. 필드 e(키 → 값 맵) 하나만 있다.
 // users/{uid}/ch/{docId}   장 본문 조각. 필드 t(본문 JSON의 일부), i(조각 번호), n(조각 수), v(판).
+//                          문서 id는 "장~판~번호"다. 예전에 쓴 장은 "장~번호"이고 다시 쓸 때 옮겨진다.
 //
 // 화면을 열 때 kv 전체를 한 번 구독하므로(4.2-7), 메모처럼 많은 것은 문서 몇 개에 묶는다.
 // 본문은 크고 장을 열 때만 필요해서 따로 둔다.
@@ -76,13 +77,43 @@ export function keyOf(docId: string, field: string): string | null {
 // 장 본문의 크기 목록 문서. 항목 이름은 locate의 chapter id(인코딩한 "책:장")다.
 export const CHAPTER_INDEX_DOC = 'chsizes';
 export const chapterKeyOf = (id: string) => `${PREFIX.chapter}${decodeId(id)}`;
-export const chunkDocId = (id: string, i: number) => `${id}~${i}`;
 
-export interface ChapterIndexEntry {
+// 한 판의 조각 묶음.
+export interface ChunkSet {
   n: number; // 조각 수
-  v: string; // 판. 캐시의 조각이 지금 판인지 볼 때 쓴다.
+  v: string; // 판. 쓸 때마다 새로 만든다.
   bytes: number; // 조각 문서들의 저장 크기 합
+  l?: 2; // 2면 문서 id가 "장~판~번호", 없으면 예전 배치인 "장~번호"
+  t?: number; // 쓰기 시작한 때(ms). 아직 지금 판이 되지 못한 새 판에만 있다.
 }
+
+// 목록 문서의 장 항목. n, v, bytes, l은 지금 읽는 판이다(쓰다가 실패한 새 장은 이 넷이 없고 p만 있다).
+// p는 지워야 할 조각 묶음이다. 쓰다 만 새 판이거나 판을 바꾼 뒤 아직 지우지 못한 옛 판이고, 읽을 때는 보지 않는다.
+export interface ChapterIndexEntry extends Partial<ChunkSet> {
+  p?: ChunkSet[];
+}
+
+export const chunkDocId = (id: string, set: Pick<ChunkSet, 'v' | 'l'>, i: number) =>
+  set.l === 2 ? `${id}~${set.v}~${i}` : `${id}~${i}`;
+
+const isChunkSet = (s: unknown): s is ChunkSet => {
+  const x = s as Partial<ChunkSet> | null | undefined;
+  return !!x && typeof x.v === 'string' && typeof x.n === 'number' && x.n >= 1;
+};
+
+// 지금 읽는 판. 없으면 null.
+export const currentSet = (entry: ChapterIndexEntry | undefined): ChunkSet | null =>
+  isChunkSet(entry) ? { n: entry.n, v: entry.v, bytes: entry.bytes ?? 0, ...(entry.l === 2 ? { l: 2 as const } : {}) } : null;
+
+// 지워야 할 조각 묶음.
+export const pendingSets = (entry: ChapterIndexEntry | undefined): ChunkSet[] =>
+  (Array.isArray(entry?.p) ? (entry?.p ?? []) : []).filter(isChunkSet);
+
+// 그 장의 조각 문서가 있는 모든 묶음(지금 판 + 지워야 할 것).
+export const chunkSets = (entry: ChapterIndexEntry | undefined): ChunkSet[] => {
+  const current = currentSet(entry);
+  return current ? [current, ...pendingSets(entry)] : pendingSets(entry);
+};
 
 export const splitChunks = (text: string) => {
   const chunks: string[] = [];

@@ -40,6 +40,8 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 page.setDefaultTimeout(120000);
 const results = {};
+// 어느 단계인지 표준 오류에 적는다(결과 JSON은 표준 출력).
+const step = (name) => console.error(`[perf] ${name}`);
 
 try {
   await page.goto(`${base}/reader-dev.html?seed=perf&voices=device#/`);
@@ -51,6 +53,7 @@ try {
   });
   results.data = counts;
 
+  step('preview');
   // (a) 200만 자 붙여 넣기 → 정리·장 나누기 미리 보기
   await page.evaluate(() => (window.location.hash = '#/import'));
   await page.waitForSelector('.nfr-import-body');
@@ -74,6 +77,7 @@ try {
   })()`);
   results.preview = preview;
 
+  step('chapter');
   // (b) 장 하나(20만 자) 열기: 큰 책에서 다른 장을 누른다.
   await page.evaluate(() => (window.location.hash = '#/book/perf-0?chapter=ch1'));
   await page.waitForSelector('.nfr-paragraph');
@@ -87,6 +91,7 @@ try {
   })()`);
   results.chapter = chapter;
 
+  step('search');
   // (c) 모아 보기 검색
   await page.evaluate(() => (window.location.hash = '#/memos'));
   await page.waitForSelector('.nfr-memo-card');
@@ -102,6 +107,7 @@ try {
   })()`.replace(`!== '' + before + ''`, '!== before'));
   results.search = search;
 
+  step('bookList');
   // (d) 진행률이 들어간 책 목록: 다른 화면에서 책 목록으로 간다.
   const openBookList = `(async () => {
     const start = performance.now();
@@ -120,6 +126,7 @@ try {
   await page.waitForSelector('.nfr-memo-card');
   results.bookList = await page.evaluate(openBookList);
 
+  step('bookListOld');
   // (e) 이 기능 전에 저장한 모양(장 글자 수 없음)의 책 20권을 처음 열 때: 본문을 한 번 읽어 글자 수를 채운다.
   await page.evaluate(async () => {
     const area = window.nfStudyDev.area;
@@ -135,6 +142,7 @@ try {
   await page.waitForSelector('.nfr-memo-card');
   results.bookListOld = await page.evaluate(openBookList);
 
+  step('firstSpeak');
   // (f) 20만 자 장에서 "여기서부터 읽기" → 첫 발화 요청
   await page.evaluate(() => (window.location.hash = '#/book/perf-0?chapter=ch5'));
   await page.waitForFunction(() => document.querySelectorAll('.nfr-paragraph').length > 100 && document.querySelector('.nfr-read-from'));
@@ -150,6 +158,7 @@ try {
     return { ms: first.at - start, paragraphs: buttons.length, text: first.text.slice(0, 40) };
   })()`);
 
+  step('editorOpen');
   // (g) 20만 자 장의 본문 편집 창 열기: 리더에서 "이 장 고치기"를 누른다.
   await page.evaluate(() => (window.location.hash = '#/book/perf-0?chapter=ch7'));
   await page.waitForFunction(() => document.querySelectorAll('.nfr-paragraph').length > 100);
@@ -162,6 +171,7 @@ try {
     return { ms: end - start, chars: document.querySelector('.nfr-chapter-body').value.length };
   })()`);
 
+  step('editorType');
   // (h) 그 편집 창에 글자 하나를 넣고 화면에 반영되기까지. 실제 키 입력으로 다섯 번 재고 가장 느린 것을 본다.
   await page.evaluate(() => {
     const textarea = document.querySelector('.nfr-chapter-body');
@@ -188,19 +198,22 @@ try {
     summary: document.querySelector('.nfr-edit-summary').textContent,
   }));
 
+  step('editorSave');
   // (i) 메모 200개가 붙은 그 장에서 낱말 하나를 고치고 저장 → 저장이 끝나 리더가 다시 그려지기까지.
   results.editorSave = await page.evaluate(`(async () => {
     const textarea = document.querySelector('.nfr-chapter-body');
+    // 성능 시드의 큰 책은 글자 수 상한에 닿아 있어서, 글이 늘지 않게 낱말의 한 글자를 다른 글자로 바꾼다.
     const at = textarea.value.indexOf(' ', Math.floor(textarea.value.length / 3)) + 1;
-    const end0 = textarea.value.indexOf(' ', at);
-    textarea.setRangeText('corrected', at, end0, 'end');
+    window.__editedWord = textarea.value.slice(at, textarea.value.indexOf(' ', at));
+    textarea.setRangeText(textarea.value[at] === 'q' ? 'z' : 'q', at, at + 1, 'end');
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     const button = Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === '저장');
     const start = performance.now();
     button.click();
-    const end = await ${waitPainted("document.querySelector('dialog[open]') || (!document.querySelector('.nfr-chapter-body') && document.querySelectorAll('.nfr-paragraph').length > 100)")};
+    const end = await ${waitPainted("document.querySelector('dialog[open]') || document.querySelector('.nfr-chapter-edit [role=alert]') || (!document.querySelector('.nfr-chapter-body') && document.querySelectorAll('.nfr-paragraph').length > 100)")};
     const dialog = !!document.querySelector('dialog[open]');
-    return { ms: end - start, dialog };
+    const alert = document.querySelector('.nfr-chapter-edit [role=alert]');
+    return { ms: end - start, dialog, alert: alert ? alert.textContent : null, word: window.__editedWord };
   })()`);
   const saved = await page.evaluate(async () => {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -209,7 +222,9 @@ try {
     const keys = (await area.getKeys()).filter((k) => k.startsWith('memo:perf-edit-'));
     const memos = Object.values(await area.get(keys));
     const attached = memos.filter((m) => body[m.paragraphIndex] === m.contextText && m.contextText.slice(m.start, m.end) === m.quote).length;
-    return { corrected: body.some((p) => p.includes('corrected')), memos: memos.length, attached, marks: document.querySelectorAll('.nfr-paragraph mark').length };
+    const word = window.__editedWord;
+    const edited = (word[0] === 'q' ? 'z' : 'q') + word.slice(1);
+    return { corrected: body.some((p) => p.includes(edited)), memos: memos.length, attached, marks: document.querySelectorAll('.nfr-paragraph mark').length };
   });
   results.editorSave = { ...results.editorSave, ...saved };
 } finally {
@@ -228,6 +243,8 @@ const pass = {
   // 낱말 하나를 고친 저장은 확인 창 없이 끝나고, 메모는 199개 넘게 붙어 있어야 한다(고친 낱말을 고른 메모는 고른 글이 바뀐다).
   editorSave:
     results.editorSave.ms <= LIMITS.editorSave &&
+    !results.editorSave.dialog &&
+    !results.editorSave.alert &&
     results.editorSave.corrected &&
     results.editorSave.memos === 200 &&
     results.editorSave.attached === 200,

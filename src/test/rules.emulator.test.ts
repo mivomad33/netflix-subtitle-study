@@ -140,6 +140,20 @@ describe('4.5-2 size limits', () => {
     await assertFails(setDoc(doc(db, 'users/abc/kv/book-bk1'), book({ title: 'a'.repeat(2001) })));
   });
 
+  // book-edit 4.7-6: 규칙은 고치지 않았다. 이 기능이 쓰는 가장 큰 정상 문서가 지금 규칙을 통과하는지 본다.
+  it('book-edit 4.7-6 passes a book with 3,000 chapters and a full chunk named "chapter~version~number"', async () => {
+    const db = as('abc');
+    const chapters = Array.from({ length: 3000 }, (_, i) => ({ id: `ch${i}`, title: `Chapter ${i}`, paragraphCount: 40, charCount: 12000 }));
+    await assertSucceeds(setDoc(doc(db, 'users/abc/kv/book-bk1'), book({ chapters })));
+    const chunk = { t: 'a'.repeat(300000), i: 99, n: 100, v: 'lz4k2x9ab3cd' };
+    await assertSucceeds(setDoc(doc(db, 'users/abc/ch/bk1%3Ach2~lz4k2x9ab3cd~99'), chunk));
+    await assertFails(setDoc(doc(db, 'users/abc/ch/bk1%3Ach2~lz4k2x9ab3cd~99'), { ...chunk, t: 'a'.repeat(300001) }));
+    // 목록 문서의 장 항목에 덜 지운 조각 기록(p)이 붙어도 통과한다.
+    const entry = { n: 100, v: 'lz4k2x9ab3cd', bytes: 90000000, l: 2, p: [{ v: 'lz4k2x9ab3ce', n: 100, bytes: 90000000, l: 2 }] };
+    await assertSucceeds(setDoc(doc(db, 'users/abc/kv/chsizes'), { e: { 'bk1%3Ach2': entry } }));
+    await assertSucceeds(deleteDoc(doc(db, 'users/abc/ch/bk1%3Ach2~lz4k2x9ab3cd~99')));
+  });
+
   it('checks chunk numbering', async () => {
     const db = as('abc');
     await assertFails(setDoc(doc(db, 'users/abc/ch/x~1'), { t: '', i: 1, n: 1, v: 'v' }));

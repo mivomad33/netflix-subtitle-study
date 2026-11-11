@@ -1,8 +1,9 @@
 // Firestore 저장소를 에뮬레이터로 확인한다(4.2-1, 4.2-2, 4.2-3, 4.2-4, 4.2-7, 4.4-1).
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { collection, getDocs } from 'firebase/firestore';
+// book-edit 명세의 4.3-9, 4.3-10, 4.2-5도 여기서 본다.
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { DocumentReference, collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import { TestClient, clearFirestore, countDocs, signedInClient } from '../../test/emulator';
-import { FirestoreArea, createFirestoreArea } from './firestoreArea';
+import { FirestoreArea, FirestoreAreaOptions, createFirestoreArea } from './firestoreArea';
 import { defineRepoCases } from './repoCases';
 import { defineStudyProgressCases } from './studyProgressCases';
 import { StorageChanges } from './storageArea';
@@ -22,16 +23,27 @@ import {
 } from './repo';
 import { bookMemo, netflixMemo } from './testFixtures';
 import { KEY, NETFLIX_KEY } from './keys';
-import { CHUNK_CHARS, USAGE_LIMIT_BYTES, docSize } from './firestoreLayout';
+import { CHUNK_CHARS, USAGE_LIMIT_BYTES, docSize, encodeId } from './firestoreLayout';
+
+// 서버에서 문서 하나를 읽기 직전에 끼어드는 자리. 읽는 사이에 다른 쓰기가 끝난 상황을 만들 때만 쓴다.
+const serverRead = vi.hoisted(() => ({ before: null as null | ((path: string) => Promise<void>) }));
+vi.mock('firebase/firestore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('firebase/firestore')>();
+  const getDocFromServer = async (ref: DocumentReference) => {
+    await serverRead.before?.(ref.path);
+    return actual.getDocFromServer(ref);
+  };
+  return { ...actual, getDocFromServer };
+});
 
 const clients: TestClient[] = [];
 const areas: FirestoreArea[] = [];
 let n = 0;
 
-async function open(sub = `user${n++}`) {
+async function open(sub = `user${n++}`, options: FirestoreAreaOptions = {}) {
   const client = await signedInClient(sub);
   clients.push(client);
-  const area = createFirestoreArea(client.db, client.uid);
+  const area = createFirestoreArea(client.db, client.uid, options);
   areas.push(area);
   await area.ready();
   return { client, area };
@@ -42,6 +54,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  serverRead.before = null;
   areas.splice(0).forEach((a) => a.close());
 });
 
@@ -263,7 +276,251 @@ describe('4.2-7 reads only what a screen needs', () => {
     const before = await countDocs(`users/${fresh.uid}/ch`);
     expect(before).toBe(30);
     expect(await getChapterParagraphs(freshArea, 'perf', 'c3')).toEqual(chapters[3].paragraphs);
-    expect(chunkReads).toEqual(['perf%3Ac3~0']);
+    // 조각 문서 id는 "장~판~번호"다.
+    expect(chunkReads).toHaveLength(1);
+    expect(chunkReads[0]).toMatch(/^perf%3Ac3~[0-9a-z]+~0$/);
     console.info(`[4.2-7] kv documents read on open: ${serverDocs}, chapter chunks read to open one chapter: 1`);
+  });
+});
+
+// 그 사용자의 본문 조각 문서 id 목록.
+const chunkIds = async (client: TestClient) =>
+  (await getDocs(collection(client.db, 'users', client.uid, 'ch'))).docs.map((d) => d.id).sort();
+
+// 장 목록 문서(chsizes)에서 그 장의 항목.
+const indexEntry = async (client: TestClient, bookId: string, chapterId: string) =>
+  (await getDoc(doc(client.db, 'users', client.uid, 'kv', 'chsizes'))).data()?.e?.[encodeId(`${bookId}:${chapterId}`)];
+
+describe('4.3-9 book-edit: a chapter save is never left half done', () => {
+  it('a failure between the chunk write and the kv write leaves the old body, memos and book; saving again stores all of it', async () => {
+    const sub = 'half-save';
+    const oldBody = ['The kettle sang on the old stove.', 'Nobody heard it.'];
+    const newBody = ['The kettle sang on the old stove.', 'Nobody heard it at all.', 'The cat slept on.'];
+    const oldMemos = [
+      bookMemo({ id: 'hs1', sourceId: 'hs', chapterId: 'c1', paragraphIndex: 0 }),
+      bookMemo({ id: 'hs2', sourceId: 'hs', chapterId: 'c1', paragraphIndex: 1, contextText: oldBody[1], quote: 'heard', start: 7, end: 12 }),
+    ];
+    const newMemos = [
+      { ...oldMemos[0], updatedAt: 9 },
+      { ...oldMemos[1], contextText: newBody[1], updatedAt: 9 },
+    ];
+    const first = await open(sub);
+    const oldBook = await saveBook(first.area, { id: 'hs', title: 'Half', author: 'A', createdAt: 1, updatedAt: 1 }, [
+      { id: 'c1', title: 'One', paragraphs: oldBody },
+    ]);
+    for (const m of oldMemos) await putMemo(first.area, m);
+    const newBook = { ...oldBook, updatedAt: 9, chapters: [{ ...oldBook.chapters[0], paragraphCount: 3, charCount: 999 }] };
+    const edit = {
+      [KEY.chapter('hs', 'c1')]: newBody,
+      [KEY.book('hs')]: newBook,
+      [KEY.memo('hs1')]: newMemos[0],
+      [KEY.memo('hs2')]: newMemos[1],
+    };
+    expect(await chunkIds(first.client)).toHaveLength(1);
+    const usedBefore = await first.area.usage();
+
+    let fail = true;
+    const writer = await open(sub, {
+      beforeKvCommit: () => {
+        if (fail) throw new Error('injected failure');
+      },
+    });
+    await expect(writer.area.set(edit)).rejects.toThrow();
+
+    // 실패 뒤 새 클라이언트: 고치기 전 본문·메모·책 정보가 오류 없이 읽힌다.
+    const afterFailure = await open(sub);
+    expect(await getChapterParagraphs(afterFailure.area, 'hs', 'c1')).toEqual(oldBody);
+    expect(await getMemo(afterFailure.area, 'hs1')).toEqual(oldMemos[0]);
+    expect(await getMemo(afterFailure.area, 'hs2')).toEqual(oldMemos[1]);
+    expect((await listBooks(afterFailure.area))[0]).toEqual(oldBook);
+    // 남은 새 조각도 저장량에 들어간다.
+    expect(await afterFailure.area.usage()).toBeGreaterThan(usedBefore + JSON.stringify(newBody).length);
+
+    // 같은 저장을 다시 하면 끝까지 저장된다.
+    fail = false;
+    await writer.area.set(edit);
+    const afterRetry = await open(sub);
+    expect(await getChapterParagraphs(afterRetry.area, 'hs', 'c1')).toEqual(newBody);
+    expect(await getMemo(afterRetry.area, 'hs1')).toEqual(newMemos[0]);
+    expect(await getMemo(afterRetry.area, 'hs2')).toEqual(newMemos[1]);
+    expect((await listBooks(afterRetry.area))[0]).toEqual(newBook);
+    // 실패한 저장이 남긴 조각과 옛 조각이 모두 지워졌다.
+    expect(await chunkIds(afterRetry.client)).toHaveLength(1);
+    expect(await countDocs(`users/${afterRetry.client.uid}/ch`)).toBe(1);
+    expect(Object.keys(await indexEntry(afterRetry.client, 'hs', 'c1')).sort()).toEqual(['bytes', 'l', 'n', 'v']);
+    expect(await afterRetry.area.usage()).toBeLessThan(usedBefore + 2 * JSON.stringify(newBody).length);
+  });
+});
+
+describe('4.3-9 book-edit: chunks left by a failed save of another client', () => {
+  it('are kept and counted while that save may still be running, and removed by a later save once they are old', async () => {
+    const sub = 'left-chunks';
+    const key = KEY.chapter('lc', 'c1');
+    const first = await open(sub);
+    await first.area.set({ [key]: ['A gull circled the pier.'] });
+    const failing = await open(sub, {
+      beforeKvCommit: () => {
+        throw new Error('injected failure');
+      },
+    });
+    await expect(failing.area.set({ [key]: ['A gull circled the pier twice.'] })).rejects.toThrow();
+
+    // 다른 클라이언트는 그 조각을 쓰는 쪽이 아직 살아 있는지 모른다. 지우지 않고 저장량에 넣어 둔다.
+    const second = await open(sub);
+    await second.area.set({ [key]: ['Two gulls circled the pier.'] });
+    expect(await chunkIds(second.client)).toHaveLength(2);
+    expect((await indexEntry(second.client, 'lc', 'c1')).p).toHaveLength(1);
+    const withLeftover = await (await open(sub)).area.usage();
+
+    // 오래된 것으로 보면(기다리는 시간을 없앤 저장소) 다음 저장이 지운다.
+    const later = await open(sub, { pendingGraceMs: -1 });
+    await later.area.set({ [key]: ['Three gulls circled the pier.'] });
+    expect(await chunkIds(later.client)).toHaveLength(1);
+    expect((await indexEntry(later.client, 'lc', 'c1')).p).toBeUndefined();
+    const reader = await open(sub);
+    expect(await getChapterParagraphs(reader.area, 'lc', 'c1')).toEqual(['Three gulls circled the pier.']);
+    expect(await reader.area.usage()).toBeLessThan(withLeftover);
+  });
+});
+
+describe('4.3-10 book-edit: reading a chapter while it is rewritten', () => {
+  it('another client always reads the whole old body or the whole new body, without an error', async () => {
+    const sub = 'rewrite-read';
+    const key = KEY.chapter('rw', 'c1');
+    const body = (round: number) =>
+      Array.from({ length: 30 }, (_, i) => `Round ${round}, paragraph ${i}. ${'The lamp flickered twice. '.repeat(1000)}`);
+    const bodies = Array.from({ length: 6 }, (_, round) => body(round));
+    const texts = bodies.map((b) => JSON.stringify(b));
+    expect(Math.ceil(texts[0].length / CHUNK_CHARS)).toBeGreaterThan(2);
+
+    const a = await open(sub);
+    await a.area.set({ [key]: bodies[0] });
+    const b = await open(sub);
+
+    // 회차마다 쓰기가 끝날 때까지 읽기를 되풀이한다(쓰는 동안 적어도 한 번 읽는다).
+    // 읽은 값은 그때까지 쓴 본문 가운데 하나의 전체여야 한다. 읽는 쪽의 목록이 조금 늦게 따라오므로 바로 앞 회차보다 더 옛 본문일 수는 있다.
+    const reads: { round: number; got: number }[] = [];
+    for (let round = 1; round < bodies.length; round++) {
+      let writing = true;
+      const write = a.area.set({ [key]: bodies[round] }).finally(() => {
+        writing = false;
+      });
+      do {
+        const got = await b.area.get([key]);
+        reads.push({ round, got: texts.indexOf(JSON.stringify(got[key])) });
+        // 캐시에서만 읽으면 이 반복이 네트워크 응답을 처리할 틈을 주지 않으므로 한 번 양보한다.
+        await new Promise((r) => setTimeout(r, 0));
+      } while (writing);
+      await write;
+    }
+    reads.forEach((r) => {
+      expect(r.got).toBeGreaterThanOrEqual(0);
+      expect(r.got).toBeLessThanOrEqual(r.round);
+    });
+    const fresh = await open(sub);
+    expect(await fresh.area.get([key])).toEqual({ [key]: bodies[bodies.length - 1] });
+    expect(await countDocs(`users/${fresh.client.uid}/ch`)).toBe(Math.ceil(texts[texts.length - 1].length / CHUNK_CHARS));
+  }, 120000);
+});
+
+describe('4.3-10 book-edit: a rewrite that finishes between reading the chapter list and reading the chunks', () => {
+  const key = KEY.chapter('rr', 'c1');
+  const body = (word: string) => [`${word} `.repeat(Math.ceil((CHUNK_CHARS + 1000) / (word.length + 1))), `${word} ends here.`];
+
+  // 읽는 쪽이 목록을 본 뒤 첫 조각을 서버에서 읽기 직전에 change를 끝까지 실행한다.
+  const readDuring = async (sub: string, change: (writer: FirestoreArea) => Promise<void>) => {
+    const writer = await open(sub);
+    await writer.area.set({ [key]: body('Willow') });
+    const reader = await open(sub);
+    let changed = false;
+    serverRead.before = async (path) => {
+      if (changed || !path.includes('/ch/')) return;
+      changed = true;
+      await change(writer.area);
+    };
+    const got = await reader.area.get([key]);
+    expect(changed).toBe(true);
+    return got;
+  };
+
+  it('reads the new body after the old chunks were deleted', async () => {
+    const got = await readDuring('reread-new', (writer) => writer.set({ [key]: body('Poplar') }));
+    expect(got).toEqual({ [key]: body('Poplar') });
+  });
+
+  it('reads nothing, without an error, when the chapter was deleted', async () => {
+    const got = await readDuring('reread-gone', (writer) => writer.remove([key]));
+    expect(got).toEqual({});
+  });
+});
+
+describe('4.3-9 book-edit: chapters stored in the earlier chunk layout', () => {
+  it('reads a chapter whose chunks are named "chapter~number", and rewriting it removes those documents', async () => {
+    const client = await signedInClient('legacy-layout');
+    clients.push(client);
+    const id = encodeId('lg:c1');
+    const oldBody = ['A heron stood in the shallow water.', 'It did not move for an hour.'];
+    const text = JSON.stringify(oldBody);
+    const parts = [text.slice(0, 20), text.slice(20)];
+    for (const [i, t] of parts.entries()) {
+      await setDoc(doc(client.db, 'users', client.uid, 'ch', `${id}~${i}`), { t, i, n: parts.length, v: 'legacy1' });
+    }
+    await setDoc(doc(client.db, 'users', client.uid, 'kv', 'chsizes'), {
+      e: { [id]: { n: parts.length, v: 'legacy1', bytes: 600 } },
+    });
+    const area = createFirestoreArea(client.db, client.uid);
+    areas.push(area);
+    await area.ready();
+    expect(await getChapterParagraphs(area, 'lg', 'c1')).toEqual(oldBody);
+
+    const newBody = ['A heron stood in the shallow water.', 'It did not move for two hours.'];
+    await area.set({ [KEY.chapter('lg', 'c1')]: newBody });
+    const ids = await chunkIds(client);
+    expect(ids).toHaveLength(1);
+    expect(ids[0]).toMatch(new RegExp(`^${id}~[0-9a-z]+~0$`));
+    const other = await open('legacy-layout');
+    expect(await getChapterParagraphs(other.area, 'lg', 'c1')).toEqual(newBody);
+  });
+});
+
+describe('4.2-5 book-edit: deleting one chapter', () => {
+  it('removes every chunk of that chapter, also those a failed save left, and keeps other chapters and the same chapter id of another book', async () => {
+    const sub = 'delete-chapter';
+    let fail = false;
+    const { client, area } = await open(sub, {
+      beforeKvCommit: () => {
+        if (fail) throw new Error('injected failure');
+      },
+    });
+    const long = (word: string) => [`${word} `.repeat(Math.ceil((CHUNK_CHARS + 1000) / (word.length + 1)))];
+    const chapters = (word: string) => [
+      { id: 'ch1', title: 'One', paragraphs: [`${word} opens the first chapter.`] },
+      { id: 'ch2', title: 'Two', paragraphs: long(word) },
+    ];
+    await saveBook(area, { id: 'bkA', title: 'A', author: '', createdAt: 1, updatedAt: 1 }, chapters('Maple'));
+    await saveBook(area, { id: 'bkB', title: 'B', author: '', createdAt: 1, updatedAt: 1 }, chapters('Cedar'));
+    // 실패한 저장이 bkA의 ch2에 조각을 남긴다.
+    fail = true;
+    await expect(area.set({ [KEY.chapter('bkA', 'ch2')]: long('Birch') })).rejects.toThrow();
+    fail = false;
+    const of = (ids: string[], bookId: string, chapterId: string) =>
+      ids.filter((x) => x.startsWith(`${encodeId(`${bookId}:${chapterId}`)}~`));
+    const before = await chunkIds(client);
+    expect(of(before, 'bkA', 'ch2')).toHaveLength(4);
+    expect(before).toHaveLength(8);
+
+    await area.remove([KEY.chapter('bkA', 'ch2')]);
+
+    const after = await chunkIds(client);
+    expect(of(after, 'bkA', 'ch2')).toHaveLength(0);
+    expect(of(after, 'bkA', 'ch1')).toHaveLength(1);
+    expect(of(after, 'bkB', 'ch1')).toHaveLength(1);
+    expect(of(after, 'bkB', 'ch2')).toHaveLength(2);
+    expect(await indexEntry(client, 'bkA', 'ch2')).toBeUndefined();
+    const other = await open(sub);
+    expect(await other.area.get([KEY.chapter('bkA', 'ch2')])).toEqual({});
+    expect(await getChapterParagraphs(other.area, 'bkA', 'ch1')).toEqual(chapters('Maple')[0].paragraphs);
+    expect(await getChapterParagraphs(other.area, 'bkB', 'ch1')).toEqual(chapters('Cedar')[0].paragraphs);
+    expect(await getChapterParagraphs(other.area, 'bkB', 'ch2')).toEqual(long('Cedar'));
   });
 });

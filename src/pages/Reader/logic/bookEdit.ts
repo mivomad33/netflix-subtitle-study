@@ -173,8 +173,9 @@ export async function addChapter(
   const title = cleanTitle(input.title);
   if (title === null) throw new BookEditError('invalid');
   const fresh = await freshBook(area, loaded);
-  const chars = (await totalChars(area, fresh)) + charCount(input.paragraphs);
-  if (chars > MAX_BOOK_CHARS) throw new BookEditError('too-long', { chars });
+  const added = charCount(input.paragraphs);
+  const chars = (await totalChars(area, fresh)) + added;
+  if (chars > MAX_BOOK_CHARS && added > 0) throw new BookEditError('too-long', { chars });
   const chapterId = `c-${createId()}`;
   const memos = await listMemosBySource(area, 'book', fresh.id);
   const attached = await reattach(area, fresh, chapterId, input.paragraphs, memos, new Set(), now);
@@ -258,14 +259,16 @@ export async function planChapterSave(area: StorageArea, input: ChapterSaveInput
   if (!book) throw new BookEditError('book-missing');
   if (!book.chapters.some((c) => c.id === input.chapterId)) throw new BookEditError('chapter-missing');
   const stored = await getChapterParagraphs(area, input.bookId, input.chapterId);
-  if (!sameParagraphs(stored, input.original)) throw new BookEditError('chapter-changed');
   const beforeChars = charCount(stored);
   const afterChars = charCount(input.after);
+  // 저장된 본문이 이미 저장하려는 글과 같으면 쓸 것이 없다(저장이 끝난 뒤 다시 누른 경우 포함).
   if (sameParagraphs(stored, input.after)) {
     return { book, unchanged: true, lost: [], changed: [], position: null, beforeChars, afterChars };
   }
+  if (!sameParagraphs(stored, input.original)) throw new BookEditError('chapter-changed');
+  // 상한은 글이 늘어나는 저장만 막는다. 이미 상한을 넘은 책도 줄이거나 같은 길이로 고칠 수 있어야 한다.
   const chars = (await totalChars(area, book, input.chapterId)) + afterChars;
-  if (chars > MAX_BOOK_CHARS) throw new BookEditError('too-long', { chars });
+  if (chars > MAX_BOOK_CHARS && afterChars > beforeChars) throw new BookEditError('too-long', { chars });
 
   const memos = await listMemosBySource(area, 'book', input.bookId);
   const here = memosOfChapter(memos, input.bookId, input.chapterId).filter((m) => isBookMemoAnchored(m, stored));

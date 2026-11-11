@@ -318,6 +318,42 @@ describe('book-edit 4.3 saving a chapter body', () => {
     expect((await getChapterParagraphs(area, 'bk1', 'ch1'))[0]).toHaveLength(MAX_BOOK_CHARS - others);
   });
 
+  it('4.3-8 lets a book that is already over the limit be shortened or kept the same length', async () => {
+    const area = createMemoryArea();
+    const big = ['x'.repeat(MAX_BOOK_CHARS), 'tail words here'];
+    await saveBook(area, { id: 'bk1', title: 'Big', author: '', createdAt: 1, updatedAt: 1 }, [
+      { id: 'ch1', title: 'One', paragraphs: big },
+      { id: 'ch2', title: 'Two', paragraphs: ['more'] },
+    ]);
+    const same = [big[0], 'tail wards here'];
+    await saveChapterBody(area, { bookId: 'bk1', chapterId: 'ch1', original: big, after: same });
+    expect((await getChapterParagraphs(area, 'bk1', 'ch1'))[1]).toBe('tail wards here');
+    expect(await code(saveChapterBody(area, { bookId: 'bk1', chapterId: 'ch1', original: same, after: [big[0], 'tail wards here!'] }))).toBe('too-long');
+    await saveChapterBody(area, { bookId: 'bk1', chapterId: 'ch1', original: same, after: [big[0], 'tail'] });
+    expect((await getChapterParagraphs(area, 'bk1', 'ch1'))[1]).toBe('tail');
+  });
+
+  it('4.3-14 saves a one-word fix in a chapter of a million characters', async () => {
+    const area = createMemoryArea();
+    const paragraphs = Array.from({ length: 2000 }, (_, i) => `Paragraph ${i} ${'steady words fill this line '.repeat(18)}`.trim());
+    expect(paragraphs.join('').length).toBeGreaterThan(1_000_000);
+    await saveBook(area, { id: 'bk1', title: 'Long', author: '', createdAt: 1, updatedAt: 1 }, [
+      { id: 'ch1', title: 'One', paragraphs },
+    ]);
+    const start = paragraphs[1500].indexOf('steady');
+    await putMemo(
+      area,
+      bookMemo({ id: 'far', sourceId: 'bk1', chapterId: 'ch1', paragraphIndex: 1500, contextText: paragraphs[1500], start, end: start + 6, quote: 'steady' })
+    );
+    const after = paragraphs.slice();
+    after[1000] = after[1000].replace('steady', 'stedy');
+    after.unshift('A new opening.');
+    const plan = await saveChapterBody(area, { bookId: 'bk1', chapterId: 'ch1', original: paragraphs, after });
+    expect(plan.lost).toEqual([]);
+    expect((await getChapterParagraphs(area, 'bk1', 'ch1'))[1001]).toBe(after[1001]);
+    expect(await getMemo(area, 'far')).toMatchObject({ paragraphIndex: 1501, quote: 'steady' });
+  });
+
   it('4.2-1, 4.3-8 applies the same limit when adding a chapter', async () => {
     const area = createMemoryArea();
     const book = await seed(area);
@@ -333,6 +369,17 @@ describe('book-edit 4.3 saving a chapter body', () => {
     await area.set({ [KEY.chapter('bk1', 'ch1')]: elsewhere });
     expect(await code(saveChapterBody(area, input([CH1[0], 'My edit.', CH1[2]])))).toBe('chapter-changed');
     expect(await getChapterParagraphs(area, 'bk1', 'ch1')).toEqual(elsewhere);
+  });
+
+  it('4.3-12 treats a body that already equals the edit as saved, not as a conflict', async () => {
+    const area = createMemoryArea();
+    await seed(area);
+    const after = [CH1[0], 'My edit.', CH1[2]];
+    await saveChapterBody(area, input(after));
+    // 저장이 끝났는데 화면이 실패로 알고 같은 글을 다시 저장하는 경우.
+    const again = await saveChapterBody(area, input(after));
+    expect(again.unchanged).toBe(true);
+    expect(await getChapterParagraphs(area, 'bk1', 'ch1')).toEqual(after);
   });
 
   it('4.3-12 reports a deleted chapter or book', async () => {
