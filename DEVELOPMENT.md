@@ -21,8 +21,12 @@ Webpack Dev Server가 시작되어 변경 사항이 `build` 폴더에 실시간�
 - `?signin=cancelled`: 로그인 창을 닫은 것처럼 로그인이 실패합니다.
 - `?usage=full`: 사용량이 20MB 상한에 닿은 것처럼 보입니다.
 - `?seed=demo`: 직접 쓴 예시 본문으로 책과 메모를 채웁니다.
-- `?seed=perf`: 책 20권(그중 한 권은 200만 자)과 메모 5,000개를 채웁니다.
-- 브라우저 콘솔의 `window.nfStudyDev`에서 `reset()`, `seedDemo()`, `seedPerf()`를 부를 수 있습니다.
+- `?seed=perf`: 책 20권(그중 한 권은 200만 자)과 메모 5,000개를 채웁니다. 본문 편집 측정에 쓰려고 200만 자 책(`perf-0`)의 20만 자 장 `ch7`에 붙은 메모 200개도 더합니다.
+- `?fail=write`: 저장소 쓰기가 모두 실패합니다(읽기는 됩니다). 책 편집 화면과 본문 편집의 저장 오류 안내를 볼 때 씁니다.
+- 브라우저 콘솔의 `window.nfStudyDev`에서 `reset()`, `seedDemo()`, `seedPerf()`를 부를 수 있습니다. `failWrites(true)`와 `failWrites(false)`는 새로 고치지 않고 쓰기 실패를 켜고 끕니다. `changeChapterElsewhere(bookId, chapterId)`는 다른 탭이 고친 것처럼 그 장 맨 앞에 문단을 하나 더합니다.
+- 원서 고치기 화면은 주소로 바로 엽니다. 책 편집 화면은 `#/book/<책 id>/edit`, 본문 편집은 `#/book/<책 id>/edit/<장 id>`입니다(뒤에 `?from=reader`를 붙이면 저장하거나 취소한 뒤 책 편집 화면 대신 리더로 돌아갑니다). 데모 시드에서는 `reader-dev.html#/book/demo-lighthouse/edit`, `reader-dev.html#/book/demo-lighthouse/edit/ch1`처럼 엽니다.
+  - 저장 오류: `reader-dev.html?fail=write#/book/demo-lighthouse/edit/ch1`에서 글을 고치고 저장합니다.
+  - 동시 수정 안내: 본문 편집을 열어 글을 고친 뒤 콘솔에서 `await window.nfStudyDev.changeChapterElsewhere('demo-lighthouse', 'ch1')`을 부르고 저장합니다. 리더로 그 장을 열어 둔 채 부르면 리더가 새 본문을 다시 읽는 것을 볼 수 있습니다.
 - 소리 내어 읽기는 기본으로 소리를 내지 않는 가짜 음성([fakeSpeech.ts](src/pages/Reader/dev/fakeSpeech.ts))을 씁니다. 글자 수에 맞춰 읽기 시작·끝 신호를 보내므로 읽는 문장 표시와 자동 스크롤을 볼 수 있습니다. `?voices=`로 음성 묶음을 고르고, 고른 값은 새로 고쳐도 남습니다.
   - `device`(기본): Natural 음성 둘, Premium 음성 하나와 `basic`의 음성들(목록에는 앞의 셋과 온라인 영어 음성이 보임)
   - `basic`: 기본 기기 음성 둘, 효과음 음성(Bubbles), 한국어 음성, 온라인 영어 음성(목록에는 기본 음성 둘, 온라인 영어 음성과 안내가 보임)
@@ -120,7 +124,7 @@ npm run check:build
 npm run test:emulator
 ```
 
-`firebase emulators:exec`로 Firebase 에뮬레이터(Auth 9099, Firestore 8080, 프로젝트 `demo-nf-study`)를 띄우고 `*.emulator.test.ts`를 실행합니다([vitest.emulator.config.ts](vitest.emulator.config.ts)). 보안 규칙([rules.emulator.test.ts](src/test/rules.emulator.test.ts)), Firestore 저장소, 백업, 탈퇴를 시험합니다. `demo-` 프로젝트라서 실제 Firebase 프로젝트, 설정 파일, 로그인이 필요 없습니다.
+`firebase emulators:exec`로 Firebase 에뮬레이터(Auth 9099, Firestore 8080, 프로젝트 `demo-nf-study`)를 띄우고 `*.emulator.test.ts`를 실행합니다([vitest.emulator.config.ts](vitest.emulator.config.ts)). 보안 규칙([rules.emulator.test.ts](src/test/rules.emulator.test.ts)), Firestore 저장소, 백업, 탈퇴, 원서 고치기를 시험합니다. 원서 고치기([bookEdit.emulator.test.ts](src/pages/Reader/logic/bookEdit.emulator.test.ts))는 본문 저장이 중간에 실패해도 고치기 전 본문과 메모가 그대로 읽히고 다시 저장하면 끝까지 되는지, 다른 클라이언트가 10초 안에 변경을 받고 새 본문을 읽는지, 저장 한 번이 고친 장과 다시 붙일 메모가 속한 장의 본문 조각만 읽는지를 봅니다. `demo-` 프로젝트라서 실제 Firebase 프로젝트, 설정 파일, 로그인이 필요 없습니다.
 
 에뮬레이터에는 Java 21이 필요합니다. macOS에서 Homebrew로 `openjdk@21`을 설치했다면 먼저 PATH에 더합니다.
 
@@ -138,9 +142,10 @@ npm run test:e2e
 
 - 실제 빌드의 로그인 전 원서 리더에 로그인 버튼과 방침 링크가 있는지
 - 로그아웃하면 Firestore 캐시를 지워 앞 계정의 데이터가 보이지 않는지
+- 책을 등록하고 하이라이트가 있는 문단의 오타를 본문 편집에서 고쳐 저장하면, 하이라이트가 고친 글에 그려지는지
 - 서비스 워커가 멈췄다 다시 붙어도 넷플릭스 쪽이 다른 클라이언트의 변경을 받는지
 
-로컬에서만 돌리며 CI에는 넣지 않았습니다. Java 21과 Firebase 설정 파일(실제 빌드의 로그인 화면을 보므로)이 필요합니다. Playwright는 `~/.cache/design-tools/node_modules/playwright/index.mjs`에서 불러오고, `PLAYWRIGHT_MODULE`로 다른 경로를 줄 수 있습니다. 스크린샷은 `docs/specs/20261108-0925-firebase-sync/screens/`에 남깁니다.
+로컬에서만 돌리며 CI에는 넣지 않았습니다. Java 21과 Firebase 설정 파일(실제 빌드의 로그인 화면을 보므로)이 필요합니다. Playwright는 `~/.cache/design-tools/node_modules/playwright/index.mjs`에서 불러오고, `PLAYWRIGHT_MODULE`로 다른 경로를 줄 수 있습니다. 스크린샷은 `docs/specs/20261108-0925-firebase-sync/screens/`에, 원서 고치기 경우의 것은 `docs/specs/20261111-1712-book-edit/shots/`에 남깁니다.
 
 `npm run build:e2e`(`NF_E2E=1`)는 데모 설정으로 에뮬레이터(`127.0.0.1`)에 붙고, 로그인 창 대신 테스트가 정한 가짜 Google 계정으로 로그인하는 서비스 워커([e2e.ts](src/pages/Background/e2e.ts))를 넣습니다. 테스트에만 쓰는 빌드이며 설치용이 아닙니다.
 
@@ -152,7 +157,7 @@ npm run test:e2e
 node scripts/perf/measure.mjs
 ```
 
-[measure.mjs](scripts/perf/measure.mjs)는 `reader-dev.html?seed=perf`에서 여섯 가지 시간을 잽니다. 200만 자 본문 미리 보기(3초 이하), 20만 자 장 열기(1초 이하), 메모 5,000개 검색(0.5초 이하), 진행률이 들어간 책 목록 열기(1초 이하), 장 글자 수가 없는 예전 모양의 책 20권으로 책 목록을 처음 열기(1초 이하), 20만 자 장에서 "여기서부터 읽기"를 누른 뒤 첫 발화 요청까지(가짜 음성, 0.5초 이하)입니다.
+[measure.mjs](scripts/perf/measure.mjs)는 `reader-dev.html?seed=perf`에서 아홉 가지 시간을 잽니다. 200만 자 본문 미리 보기(3초 이하), 20만 자 장 열기(1초 이하), 메모 5,000개 검색(0.5초 이하), 진행률이 들어간 책 목록 열기(1초 이하), 장 글자 수가 없는 예전 모양의 책 20권으로 책 목록을 처음 열기(1초 이하), 20만 자 장에서 "여기서부터 읽기"를 누른 뒤 첫 발화 요청까지(가짜 음성, 0.5초 이하), 20만 자 장에서 "이 장 고치기"를 눌러 본문 편집이 열리기까지(1초 이하), 그 편집 입력칸에 글자 하나를 넣고 화면에 반영되기까지(0.1초 이하), 메모 200개가 붙은 그 장에서 한 글자를 고치고 저장을 누른 뒤 저장이 끝나 리더가 다시 보이기까지(2초 이하)입니다. 마지막 측정은 저장 뒤 메모 200개가 모두 붙어 있는지도 봅니다.
 
 ## CI
 
@@ -167,13 +172,13 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 화면과 저장 코드는 키 이름으로 읽고 씁니다. 키 이름은 [keys.ts](src/shared/storage/keys.ts)에, 읽고 쓰는 코드는 [repo.ts](src/shared/storage/repo.ts)에, 메모 형식은 [types.ts](src/shared/memo/types.ts)에 있습니다. [firestoreLayout.ts](src/shared/storage/firestoreLayout.ts)가 키를 Firestore 문서에 대응시키고, [firestoreArea.ts](src/shared/storage/firestoreArea.ts)가 서비스 워커에서 읽고 씁니다. 문서는 두 컬렉션에 있습니다.
 
 - `users/{uid}/kv/{docId}`: 작은 데이터를 묶어 둔 문서. 필드는 `e`(항목 이름 → 값의 맵) 하나입니다. 서비스 워커가 `kv` 컬렉션 전체를 한 번 구독해 메모리에 두므로, 메모처럼 개수가 많은 것은 문서 몇 개에 묶어 읽기 횟수를 줄입니다. 쓰기는 맵 항목 단위로 하므로 두 탭이 같은 문서의 서로 다른 항목을 저장해도 덮어쓰지 않습니다.
-- `users/{uid}/ch/{docId}`: 장 본문 조각. 본문은 크고 장을 열 때만 필요해서 따로 둡니다. 필드는 `t`(본문 JSON의 일부), `i`(조각 번호), `n`(조각 수), `v`(판)입니다.
+- `users/{uid}/ch/{docId}`: 장 본문 조각. 본문은 크고 장을 열 때만 필요해서 따로 둡니다. 필드는 `t`(본문 JSON의 일부), `i`(조각 번호), `n`(조각 수), `v`(판)입니다. 문서 id는 `{장}~{판}~{조각 번호}`이고, 예전에 쓴 장은 `{장}~{조각 번호}`입니다.
 
 키마다 들어가는 곳은 다음과 같습니다. 문서 id에 들어가는 책·장·영상 id는 URL 인코딩합니다.
 
 - `memo:{id}` → `kv/memos-{0~31}`의 항목 `{id}`: 메모 하나. 메모 id의 해시(FNV-1a)로 32개 문서에 나눕니다. 넷플릭스 메모와 원서 메모가 같은 형식이며, 원문(문장이나 문단), 원문 안의 위치, 고른 글을 함께 저장해 원문이 같은 곳에만 다시 붙입니다.
 - `book:{id}` → `kv/book-{id}`의 항목 `m`: 책 정보(제목, 저자, 장 목록 등). 장마다 글자 수 `charCount`가 있어 학습 진행률을 본문을 읽지 않고 계산합니다. 이 항목이 없는 책(그런 백업에서 가져온 책)은 책 목록이나 리더가 처음 열 때 본문을 한 번 읽어 채웁니다.
-- `bookch:{bookId}:{chapterId}` → `ch/{bookId:chapterId}~{조각 번호}`: 한 장의 본문(문단 배열). JSON으로 만들어 30만 자씩 나눈 조각(최대 100개)으로 저장합니다. 장마다 조각 수, 판, 저장 크기는 `kv/chsizes`에 두고, 같은 장을 다시 열 때 판이 같으면 Firestore 캐시의 조각을 씁니다.
+- `bookch:{bookId}:{chapterId}` → `ch/{bookId:chapterId}~{판}~{조각 번호}`: 한 장의 본문(문단 배열). JSON으로 만들어 30만 자씩 나눈 조각(최대 100개)으로 저장합니다. 본문을 쓸 때마다 새 판을 만들어 판마다 다른 문서에 씁니다. 어느 판을 읽을지는 `kv/chsizes`의 장 항목 `{n, v, bytes, l: 2, p?}`가 정합니다. `n`은 조각 수, `v`는 지금 읽는 판, `bytes`는 저장 크기, `l: 2`는 문서 id가 판을 품은 새 배치라는 표시이고, `p`는 아직 지우지 못한 조각 묶음(쓰다 만 새 판이나 바꾼 뒤의 옛 판) 목록입니다. 같은 장을 다시 열 때 판이 같으면 Firestore 캐시의 조각을 씁니다.
 - `pos:{bookId}` → `kv/positions`의 항목 `{bookId}`: 책의 마지막 읽기 위치(장과 문단)
 - `done:{bookId}:{chapterId}` → `kv/done-{0~7}`의 항목 `{bookId}:{chapterId}`: 장 하나의 학습 완료(`done`, `updatedAt`). 끈 것도 `done: false`로 남겨, 백업을 합칠 때 장마다 나중에 바꾼 쪽을 고릅니다. 책을 지우면 함께 지워집니다.
 - `reader:settings` → `kv/settings`의 항목 `reader`: 원서 리더 설정. 글자 크기(`fontSize`)와 소리 내어 읽기 설정(`voiceURI`, `rate`, `repeat`, `autoPause`). 예전의 `allowOnlineVoices`는 쓰지 않지만 저장된 값과 백업은 그대로 받아들입니다.
@@ -182,6 +187,10 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 - `nf:itemsPerPage:{videoId}` → `kv/nf-pages`의 항목 `{videoId}`: 영상의 페이지당 대사 수
 - `nf:studied:{videoId}` → `kv/nf-studied`의 항목 `{videoId}`: 학습한 영상의 메타데이터(ID, 제목, 커버 이미지, 총 페이지 수, 업데이트 시간 등)
 - `meta:netflixUnplaced:{videoId}` → `kv/nf-unplaced`의 항목 `{videoId}`: 학습 패널이 그 영상의 대사에서 찾지 못한 넷플릭스 메모 id 목록. 메모 모아 보기가 "위치를 찾지 못함"을 붙일 때 쓰고, 패널을 열 때마다 다시 쓰므로 백업에는 넣지 않습니다.
+
+장 본문을 다시 쓸 때([firestoreArea.ts](src/shared/storage/firestoreArea.ts))는 네 단계로 씁니다. 새 판을 목록 항목의 `p`에 먼저 적고, 새 판의 조각을 쓰고, 목록 항목을 새 판으로 바꾸는 쓰기를 책 정보·메모·읽기 위치와 한 묶음으로 보낸 다음, 옛 판의 조각을 지웁니다. 그래서 어디서 실패해도 본문과 메모가 함께 옛것이거나 함께 새것이고, 다시 쓰는 동안 다른 클라이언트가 읽어도 옛 본문 전체나 새 본문 전체가 읽힙니다. 실패해 남은 조각은 `p`에 적혀 있어 다음에 그 장을 쓰거나 지울 때 지웁니다(다른 클라이언트가 쓰는 중일 수 있는 판은 1시간이 지난 뒤에 지웁니다).
+
+`l`이 없는 항목은 예전 배치(`{장}~{조각 번호}`)이며 그대로 읽습니다. 저장된 데이터를 한꺼번에 옮기지 않고, 그 장을 다시 쓸 때 새 배치가 됩니다. 반대로 이 변경 전의 빌드는 새 배치의 장을 읽지 못하므로, 같은 계정을 쓰는 모든 PC의 확장 프로그램을 함께 업데이트해야 합니다.
 
 ### 저장 상한과 보안 규칙
 
@@ -234,6 +243,7 @@ GitHub Actions([ci.yml](.github/workflows/ci.yml))가 모든 push와 pull reques
 - 개인정보처리방침·저작권 안내 페이지: [site/](site/)
 - 본문 정리와 장 나누기: [bookText.ts](src/shared/text/bookText.ts)
 - 원서 리더, 메모 모아 보기, 백업: [src/pages/Reader/](src/pages/Reader/)
+- 원서 고치기: [BookEditor.tsx](src/pages/Reader/components/BookEditor.tsx)(책 편집 화면), [ChapterEditor.tsx](src/pages/Reader/components/ChapterEditor.tsx)(본문 편집, 찾아 바꾸기), [bookEdit.ts](src/pages/Reader/logic/bookEdit.ts)(책·장 저장, 동시 수정 확인, 상한), [chapterEdit.ts](src/shared/text/chapterEdit.ts)(고치기 전후 본문을 비교해 메모와 읽기 위치 옮기기, 떨어진 메모 다시 붙이기), [leaveGuard.tsx](src/pages/Reader/leaveGuard.tsx)(저장하지 않은 수정이 있을 때 나가기 확인), [route.ts](src/pages/Reader/route.ts)(화면 주소)
 - 학습 진행률: [progress.ts](src/pages/Reader/logic/progress.ts), [ProgressBar.tsx](src/pages/Reader/components/ProgressBar.tsx)
 - 소리 내어 읽기: [src/pages/Reader/tts/](src/pages/Reader/tts/)(문장 나누기, 음성 고르기, 크롬 음성 문제를 피하는 발화 관리), [ReadAloud.tsx](src/pages/Reader/components/ReadAloud.tsx)
 - 툴바 팝업: [Popup.tsx](src/pages/Popup/Popup.tsx)

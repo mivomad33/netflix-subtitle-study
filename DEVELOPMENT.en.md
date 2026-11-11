@@ -21,8 +21,12 @@ With the dev server running, open `http://localhost:3000/reader-dev.html` to see
 - `?signin=cancelled`: Sign-in fails as if the sign-in window had been closed.
 - `?usage=full`: Usage appears to have reached the 20 MB limit.
 - `?seed=demo`: Fills in books and notes using self-written sample text.
-- `?seed=perf`: Fills in 20 books (one of them 2,000,000 characters) and 5,000 notes.
-- In the browser console, `window.nfStudyDev` provides `reset()`, `seedDemo()`, and `seedPerf()`.
+- `?seed=perf`: Fills in 20 books (one of them 2,000,000 characters) and 5,000 notes. For the text editing measurements it also adds 200 notes attached to the 200,000-character chapter `ch7` of the 2,000,000-character book (`perf-0`).
+- `?fail=write`: Every write to the store fails (reads still work). Use it to see the save error notices on the book edit page and in the text editor.
+- In the browser console, `window.nfStudyDev` provides `reset()`, `seedDemo()`, and `seedPerf()`. `failWrites(true)` and `failWrites(false)` turn write failures on and off without reloading. `changeChapterElsewhere(bookId, chapterId)` adds a paragraph at the start of that chapter as if another tab had edited it.
+- The book editing pages open directly by address. The book edit page is `#/book/<book id>/edit` and the text editor is `#/book/<book id>/edit/<chapter id>` (add `?from=reader` to return to the reader instead of the book edit page after saving or cancelling). With the demo seed, open `reader-dev.html#/book/demo-lighthouse/edit` or `reader-dev.html#/book/demo-lighthouse/edit/ch1`.
+  - Save error: edit the text and save at `reader-dev.html?fail=write#/book/demo-lighthouse/edit/ch1`.
+  - Concurrent change notice: open the text editor, edit the text, call `await window.nfStudyDev.changeChapterElsewhere('demo-lighthouse', 'ch1')` in the console, then save. Call it while the reader has that chapter open to watch the reader reread the new text.
 - Read aloud uses silent fake voices ([fakeSpeech.ts](src/pages/Reader/dev/fakeSpeech.ts)) by default. They send start and end signals timed by text length, so you can see the current-sentence highlight and auto scroll. Pick a voice set with `?voices=`; the choice is kept across reloads.
   - `device` (default): two Natural voices, one Premium voice, and the `basic` voices (the first three and the online English voice are listed)
   - `basic`: two plain device voices, a novelty voice (Bubbles), a Korean voice, and an online English voice (the two plain voices and the online English voice are listed, with a note)
@@ -120,7 +124,7 @@ Use `npm test` to rerun tests as you edit files.
 npm run test:emulator
 ```
 
-This starts the Firebase emulators (Auth on 9099, Firestore on 8080, project `demo-nf-study`) with `firebase emulators:exec` and runs the `*.emulator.test.ts` files ([vitest.emulator.config.ts](vitest.emulator.config.ts)). They test the security rules ([rules.emulator.test.ts](src/test/rules.emulator.test.ts)), Firestore storage, backup, and account deletion. Because it is a `demo-` project, no real Firebase project, config file, or sign-in is needed.
+This starts the Firebase emulators (Auth on 9099, Firestore on 8080, project `demo-nf-study`) with `firebase emulators:exec` and runs the `*.emulator.test.ts` files ([vitest.emulator.config.ts](vitest.emulator.config.ts)). They test the security rules ([rules.emulator.test.ts](src/test/rules.emulator.test.ts)), Firestore storage, backup, account deletion, and book editing. The book editing tests ([bookEdit.emulator.test.ts](src/pages/Reader/logic/bookEdit.emulator.test.ts)) check that when a text save fails partway the earlier text and notes are still read as they were and a retry completes the save, that another client receives the change within 10 seconds and then reads the new text, and that one save reads only the text chunks of the edited chapter and of the chapters holding notes that may reattach. Because it is a `demo-` project, no real Firebase project, config file, or sign-in is needed.
 
 The emulators need Java 21. On macOS with `openjdk@21` installed through Homebrew, add it to PATH first.
 
@@ -138,9 +142,10 @@ This runs `npm run build` (into `build`, with this computer's config file) and `
 
 - The real build's book reader shows the sign-in button and the policy links before sign-in.
 - Signing out clears the Firestore cache, so nothing of the previous account is shown.
+- After adding a book and fixing a typo in a highlighted paragraph in the text editor, the highlight is drawn on the corrected text.
 - The Netflix side still receives changes from another client after the service worker stops and reconnects.
 
-It runs only locally and is not part of CI. It needs Java 21 and the Firebase config file (because it checks the real build's sign-in screen). Playwright is loaded from `~/.cache/design-tools/node_modules/playwright/index.mjs`; set `PLAYWRIGHT_MODULE` to use another path. Screenshots are saved to `docs/specs/20261108-0925-firebase-sync/screens/`.
+It runs only locally and is not part of CI. It needs Java 21 and the Firebase config file (because it checks the real build's sign-in screen). Playwright is loaded from `~/.cache/design-tools/node_modules/playwright/index.mjs`; set `PLAYWRIGHT_MODULE` to use another path. Screenshots are saved to `docs/specs/20261108-0925-firebase-sync/screens/`, and those of the book editing case to `docs/specs/20261111-1712-book-edit/shots/`.
 
 `npm run build:e2e` (`NF_E2E=1`) uses a demo config that connects to the emulators (`127.0.0.1`) and includes a service worker ([e2e.ts](src/pages/Background/e2e.ts)) that signs in with a fake Google account chosen by the test instead of the sign-in window. It is a test-only build, not for installing.
 
@@ -152,7 +157,7 @@ Run this while the dev server is running. It uses the Playwright installed in `~
 node scripts/perf/measure.mjs
 ```
 
-[measure.mjs](scripts/perf/measure.mjs) measures six times on `reader-dev.html?seed=perf`: previewing a 2,000,000-character text (3 seconds or less), opening a 200,000-character chapter (1 second or less), searching 5,000 notes (0.5 seconds or less), opening the book list with progress (1 second or less), opening the book list for the first time with 20 books in the older shape without chapter character counts (1 second or less), and the time from clicking "read from here" in a 200,000-character chapter to the first speech request (fake voices, 0.5 seconds or less).
+[measure.mjs](scripts/perf/measure.mjs) measures nine times on `reader-dev.html?seed=perf`: previewing a 2,000,000-character text (3 seconds or less), opening a 200,000-character chapter (1 second or less), searching 5,000 notes (0.5 seconds or less), opening the book list with progress (1 second or less), opening the book list for the first time with 20 books in the older shape without chapter character counts (1 second or less), and the time from clicking "read from here" in a 200,000-character chapter to the first speech request (fake voices, 0.5 seconds or less), the time from clicking "이 장 고치기" (edit this chapter) in a 200,000-character chapter until the text editor is open (1 second or less), the time for one typed character to appear in that editor (0.1 seconds or less), and the time from clicking save after changing one character in that chapter, which has 200 notes attached, until the save is done and the reader is shown again (2 seconds or less). The last measurement also checks that all 200 notes are still attached after the save.
 
 ## CI
 
@@ -167,13 +172,13 @@ All study data is stored in the signed-in user's area `users/{uid}` of Cloud Fir
 Pages and storage code read and write by key name. Key names are in [keys.ts](src/shared/storage/keys.ts), the read and write code is in [repo.ts](src/shared/storage/repo.ts), and the memo format is in [types.ts](src/shared/memo/types.ts). [firestoreLayout.ts](src/shared/storage/firestoreLayout.ts) maps keys to Firestore documents, and [firestoreArea.ts](src/shared/storage/firestoreArea.ts) reads and writes them in the service worker. Documents live in two collections.
 
 - `users/{uid}/kv/{docId}`: Documents that group small data. Each has a single field `e` (a map from entry name to value). The service worker subscribes to the whole `kv` collection once and keeps it in memory, so numerous items such as notes are grouped into a few documents to keep reads down. Writes go per map entry, so two tabs saving different entries of the same document never overwrite each other.
-- `users/{uid}/ch/{docId}`: Chapter text chunks. Text is large and only needed when a chapter opens, so it is kept separately. The fields are `t` (part of the text JSON), `i` (chunk number), `n` (chunk count), and `v` (version).
+- `users/{uid}/ch/{docId}`: Chapter text chunks. Text is large and only needed when a chapter opens, so it is kept separately. The fields are `t` (part of the text JSON), `i` (chunk number), `n` (chunk count), and `v` (version). The document id is `{chapter}~{version}~{chunk number}`; chapters written earlier use `{chapter}~{chunk number}`.
 
 Each key is stored as follows. Book, chapter, and video ids in document ids are URL-encoded.
 
 - `memo:{id}` → entry `{id}` of `kv/memos-{0-31}`: One note. Notes are spread over 32 documents by a hash (FNV-1a) of the note id. Netflix notes and book notes share one format. Each stores the source text (a sentence or a paragraph), the position within it, and the selected text, so it is reattached only where the source text is the same.
 - `book:{id}` → entry `m` of `kv/book-{id}`: Book information (title, author, chapter list, and so on). Each chapter has a character count `charCount`, so study progress is computed without reading the text. Books without it (such as books imported from older backups) get it filled once from their text the first time the book list or the reader opens them.
-- `bookch:{bookId}:{chapterId}` → `ch/{bookId:chapterId}~{chunk number}`: The text of one chapter (an array of paragraphs), stored as JSON split into chunks of 300,000 characters (up to 100 chunks). Each chapter's chunk count, version, and stored size are kept in `kv/chsizes`, and when the same chapter opens again with the same version, the chunks come from the Firestore cache.
+- `bookch:{bookId}:{chapterId}` → `ch/{bookId:chapterId}~{version}~{chunk number}`: The text of one chapter (an array of paragraphs), stored as JSON split into chunks of 300,000 characters (up to 100 chunks). Every write of the text makes a new version, and each version goes to its own documents. The chapter's entry `{n, v, bytes, l: 2, p?}` in `kv/chsizes` decides which version is read. `n` is the chunk count, `v` the version currently read, `bytes` the stored size, `l: 2` marks the new layout whose document ids include the version, and `p` lists chunk sets not yet deleted (a new version that was never finished, or an old version after a switch). When the same chapter opens again with the same version, the chunks come from the Firestore cache.
 - `pos:{bookId}` → entry `{bookId}` of `kv/positions`: The last reading position in a book (chapter and paragraph)
 - `done:{bookId}:{chapterId}` → entry `{bookId}:{chapterId}` of `kv/done-{0-7}`: Study completion of one chapter (`done`, `updatedAt`). Clearing keeps the record as `done: false`, so a backup merge can pick whichever change came later for each chapter. Deleting the book removes these too.
 - `reader:settings` → entry `reader` of `kv/settings`: Book reader settings: font size (`fontSize`) and read-aloud settings (`voiceURI`, `rate`, `repeat`, `autoPause`). The old `allowOnlineVoices` is no longer used, but stored values and backups that have it are still accepted.
@@ -182,6 +187,10 @@ Each key is stored as follows. Book, chapter, and video ids in document ids are 
 - `nf:itemsPerPage:{videoId}` → entry `{videoId}` of `kv/nf-pages`: Lines per page for a video
 - `nf:studied:{videoId}` → entry `{videoId}` of `kv/nf-studied`: Metadata for a studied video (ID, title, cover image, total pages, update time, and so on)
 - `meta:netflixUnplaced:{videoId}` → entry `{videoId}` of `kv/nf-unplaced`: IDs of Netflix notes the study panel could not match to any line of that video. The memo collection uses it to show "위치를 찾지 못함" (location not found). The panel rewrites it each time it opens, so it is not part of backups.
+
+Rewriting a chapter's text ([firestoreArea.ts](src/shared/storage/firestoreArea.ts)) takes four steps. It first records the new version in the entry's `p`, writes the new version's chunks, sends the write that switches the entry to the new version in one batch with the book information, notes, and reading position, and then deletes the old version's chunks. So wherever it fails, the text and the notes are either both old or both new, and another client reading during a rewrite gets the whole old text or the whole new text. Chunks left behind by a failure are listed in `p` and deleted the next time that chapter is written or deleted (a version another client may still be writing is deleted only after 1 hour).
+
+An entry without `l` uses the earlier layout (`{chapter}~{chunk number}`) and is read as is. Stored data is not migrated in bulk; a chapter moves to the new layout when it is rewritten. Conversely, a build from before this change cannot read chapters in the new layout, so the extension must be updated together on every computer that uses the same account.
 
 ### Storage limit and security rules
 
@@ -234,6 +243,7 @@ The book reader and the memo collection open a port (`nf-study-ext`) with [extCl
 - Privacy policy and copyright notice pages: [site/](site/)
 - Text cleanup and chapter splitting: [bookText.ts](src/shared/text/bookText.ts)
 - Book reader, memo collection, backup: [src/pages/Reader/](src/pages/Reader/)
+- Book editing: [BookEditor.tsx](src/pages/Reader/components/BookEditor.tsx) (book edit page), [ChapterEditor.tsx](src/pages/Reader/components/ChapterEditor.tsx) (text editor, find and replace), [bookEdit.ts](src/pages/Reader/logic/bookEdit.ts) (saving books and chapters, concurrent change checks, the size limit), [chapterEdit.ts](src/shared/text/chapterEdit.ts) (comparing the text before and after an edit to move notes and the reading position, reattaching detached notes), [leaveGuard.tsx](src/pages/Reader/leaveGuard.tsx) (leave confirmation while there are unsaved edits), [route.ts](src/pages/Reader/route.ts) (page addresses)
 - Study progress: [progress.ts](src/pages/Reader/logic/progress.ts), [ProgressBar.tsx](src/pages/Reader/components/ProgressBar.tsx)
 - Read aloud: [src/pages/Reader/tts/](src/pages/Reader/tts/) (sentence splitting, voice choice, and a speaker that avoids Chrome speech problems), [ReadAloud.tsx](src/pages/Reader/components/ReadAloud.tsx)
 - Toolbar popup: [Popup.tsx](src/pages/Popup/Popup.tsx)
