@@ -55,6 +55,8 @@ export interface FirestoreAreaOptions {
   onChunkRead?: (docId: string, fromCache: boolean) => void;
   // 테스트에서 본문 조각을 쓴 뒤, kv 문서를 쓰기 전에 실패를 넣을 때 쓴다. 던지면 그 쓰기가 실패한다.
   beforeKvCommit?: () => void | Promise<void>;
+  // 테스트에서 저장이 끝난 뒤의 조각 정리에 실패를 넣을 때 쓴다. 던지면 정리만 건너뛴다.
+  beforeCleanup?: () => void | Promise<void>;
   // 다른 클라이언트가 쓰다 만 조각을 얼마나 지난 뒤에 지울지(밀리초). 테스트에서 줄여 쓴다.
   pendingGraceMs?: number;
 }
@@ -393,6 +395,7 @@ export function createFirestoreArea(db: Firestore, uid: string, options: Firesto
       // 4. 지워야 할 조각을 지우고, 다 지운 뒤에 그 기록을 목록에서 뺀다.
       // 저장은 3에서 끝났으므로 여기서 실패해도 쓰기는 성공이다. 남은 조각은 목록에 적혀 있어 다음 쓰기나 삭제가 지운다.
       try {
+        await options.beforeCleanup?.();
         await commitAll((add) => {
           const pending = new Map<string, ChunkSet[]>();
           const gone = new Map<string, unknown>();
@@ -400,8 +403,8 @@ export function createFirestoreArea(db: Firestore, uid: string, options: Firesto
           Object.entries(index()).forEach(([id, entry]) => {
             if (p.chapters.has(id) || currentSet(entry)) return;
             const sets = pendingSets(entry);
-            // 다른 기기가 새 장을 쓰다 만 기록(t가 있다)일 수 있는 것은 건드리지 않는다. 그런 것은 그 장을 쓰거나 지울 때만 치운다.
-            if (sets.length === 0 || !sets.every((s) => s.t === undefined || written.has(s.v))) return;
+            // 다른 기기가 새 장을 쓰는 중일 수 있는 기록(t가 있다)은 오래된 것만 치운다.
+            if (sets.length === 0 || !sets.every(collectable)) return;
             sets.forEach((s) => {
               for (let i = 0; i < Math.min(s.n, MAX_CHUNKS); i++) add((b) => b.delete(doc(chRef, chunkDocId(id, s, i))), 100);
             });

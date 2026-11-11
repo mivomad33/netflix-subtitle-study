@@ -42,14 +42,18 @@ const TitleField: React.FC<{
   draftRef.current = draft;
   // 저장을 맡겨 아직 끝나지 않은 값. 저장하는 동안에도 입력칸을 막지 않으므로, 그 사이 더 친 글과 구별한다.
   const sent = useRef<string | null>(null);
+  // 맡겨 놓고 아직 끝나지 않은 저장의 수. 둘 이상이면 sent는 맨 뒤 저장의 값이다.
+  const inFlight = useRef(0);
   // 저장된 값이 바뀌면(저장 성공, 다른 곳에서 바뀜) 입력칸도 맞춘다. 그 사이 사용자가 더 고친 글은 덮지 않는다.
   useEffect(() => {
     if (saved.current === value) return;
     // 입력칸이 저장된 값 그대로이거나, 방금 끝난 저장이 입력칸의 글을 저장한 것일 때만 맞춘다.
     // 앞선 저장이 끝났을 뿐이고 입력칸에는 그 뒤에 맡긴 글이 있으면 그대로 둔다(뒤 저장이 실패해도 글이 남는다).
-    const untouched =
-      draftRef.current === saved.current || (sent.current === value && draftRef.current.trim() === value);
+    const before = saved.current;
     saved.current = value;
+    // 뒤에 맡긴 저장이 남아 있으면 입력칸과 sent는 그 저장의 것이다. 원래 값으로 되돌려 맡긴 글도 여기서 덮지 않는다.
+    if (inFlight.current > 1 || (inFlight.current === 1 && sent.current !== value)) return;
+    const untouched = draftRef.current === before || (sent.current === value && draftRef.current.trim() === value);
     if (sent.current === value) sent.current = null;
     if (untouched) {
       setDraft(value);
@@ -70,7 +74,13 @@ const TitleField: React.FC<{
       return;
     }
     sent.current = cleaned;
-    const ok = await onSave(cleaned);
+    inFlight.current += 1;
+    let ok = false;
+    try {
+      ok = await onSave(cleaned);
+    } finally {
+      inFlight.current -= 1;
+    }
     if (!ok && sent.current === cleaned) sent.current = null;
   };
 

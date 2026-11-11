@@ -511,6 +511,64 @@ describe('4.2-5 book-edit: chunks of a deleted chapter whose cleanup did not fin
   });
 });
 
+describe('4.2-5 book-edit: a deleted chapter whose chunk cleanup failed', () => {
+  it('leaves a record another client removes at once, also for a set that a failed save had left', async () => {
+    const sub = 'delete-cleanup-failed';
+    const key = KEY.chapter('dc', 'c1');
+    let failSave = false;
+    let failCleanup = false;
+    const { client, area } = await open(sub, {
+      beforeKvCommit: () => {
+        if (failSave) throw new Error('injected failure');
+      },
+      beforeCleanup: () => {
+        if (failCleanup) throw new Error('injected failure');
+      },
+    });
+    await area.set({ [key]: ['A kettle whistled.'] });
+    failSave = true;
+    await expect(area.set({ [key]: ['A kettle whistled twice.'] })).rejects.toThrow();
+    failSave = false;
+    failCleanup = true;
+    await area.remove([key]);
+    expect(await chunkIds(client)).toHaveLength(2);
+    expect((await indexEntry(client, 'dc', 'c1')).p).toHaveLength(2);
+
+    // 다른 클라이언트의 다음 쓰기가 기다리지 않고 치운다.
+    const other = await open(sub);
+    await other.area.set({ [KEY.chapter('dc', 'c2')]: ['Another chapter.'] });
+    const ids = await chunkIds(other.client);
+    expect(ids).toHaveLength(1);
+    expect(ids[0].startsWith(`${encodeId('dc:c2')}~`)).toBe(true);
+    expect(await indexEntry(other.client, 'dc', 'c1')).toBeUndefined();
+  });
+});
+
+describe('4.3-9 book-edit: chunks of a new chapter whose first save failed', () => {
+  it('are kept while that save may still be running, and removed by a later write of another client once they are old', async () => {
+    const sub = 'new-chapter-failed';
+    const failing = await open(sub, {
+      beforeKvCommit: () => {
+        throw new Error('injected failure');
+      },
+    });
+    await expect(failing.area.set({ [KEY.chapter('nf', 'c1')]: ['Never saved.'] })).rejects.toThrow();
+
+    const second = await open(sub);
+    await second.area.set({ [KEY.chapter('nf', 'c2')]: ['A saved chapter.'] });
+    expect(await chunkIds(second.client)).toHaveLength(2);
+    expect((await indexEntry(second.client, 'nf', 'c1')).p).toHaveLength(1);
+
+    const later = await open(sub, { pendingGraceMs: -1 });
+    await later.area.set({ [KEY.chapter('nf', 'c3')]: ['One more chapter.'] });
+    expect(await chunkIds(later.client)).toHaveLength(2);
+    expect(await indexEntry(later.client, 'nf', 'c1')).toBeUndefined();
+    const reader = await open(sub);
+    expect(await getChapterParagraphs(reader.area, 'nf', 'c2')).toEqual(['A saved chapter.']);
+    expect(await getChapterParagraphs(reader.area, 'nf', 'c3')).toEqual(['One more chapter.']);
+  });
+});
+
 describe('4.2-5 book-edit: deleting one chapter', () => {
   it('removes every chunk of that chapter, also those a failed save left, and keeps other chapters and the same chapter id of another book', async () => {
     const sub = 'delete-chapter';

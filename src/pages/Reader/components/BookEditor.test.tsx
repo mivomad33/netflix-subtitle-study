@@ -355,6 +355,63 @@ describe('book-edit 4.1 책 편집 화면', () => {
     expect(first.value).toBe('Beta');
   });
 
+  // 첫 저장은 풀어 줄 때까지 기다리고, 뒤 저장은 앞 저장의 결과가 화면에 그려진 뒤에 끝난다. failAt번째 저장은 실패한다.
+  const queuedArea = (inner: StorageArea, failAt: number) => {
+    const state = { calls: 0, release: null as (() => void) | null };
+    const area: StorageArea = {
+      ...inner,
+      set: async (items) => {
+        state.calls += 1;
+        const call = state.calls;
+        if (call === 1) await new Promise<void>((resolve) => (state.release = resolve));
+        else await new Promise((resolve) => setTimeout(resolve, 30));
+        if (call === failAt) throw new Error('unavailable');
+        return inner.set(items);
+      },
+    };
+    return { area, state };
+  };
+
+  it('4.1-5 원래 제목으로 되돌려 맡긴 저장이 실패해도 입력칸이 앞 저장 값으로 바뀌지 않는다', async () => {
+    const inner = createMemoryArea();
+    await seed(inner);
+    const { area, state } = queuedArea(inner, 2);
+    renderApp(area, '#/book/bk1/edit');
+    const first = (await screen.findByRole('textbox', { name: '1번째 장 제목' })) as HTMLInputElement;
+    fireEvent.change(first, { target: { value: 'Alpha' } });
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await waitFor(() => expect(state.release).not.toBeNull());
+    fireEvent.change(first, { target: { value: 'Opening Night' } });
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await act(async () => {
+      state.release!();
+    });
+    expect(await screen.findByText('저장하지 못했습니다. 다시 시도해 주세요.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('저장하는 중입니다…')).toBeNull());
+    expect((await getBook(inner, 'bk1'))!.chapters[0].title).toBe('Alpha');
+    expect(first.value).toBe('Opening Night');
+  });
+
+  it('4.1-5 같은 제목을 두 번 맡긴 셋째 저장이 실패해도 마지막에 친 글이 남는다', async () => {
+    const inner = createMemoryArea();
+    await seed(inner);
+    const { area, state } = queuedArea(inner, 3);
+    renderApp(area, '#/book/bk1/edit');
+    const first = (await screen.findByRole('textbox', { name: '1번째 장 제목' })) as HTMLInputElement;
+    for (const title of ['Alpha', 'Opening Night', 'Alpha']) {
+      fireEvent.change(first, { target: { value: title } });
+      fireEvent.keyDown(first, { key: 'Enter' });
+      await waitFor(() => expect(state.release).not.toBeNull());
+    }
+    await act(async () => {
+      state.release!();
+    });
+    expect(await screen.findByText('저장하지 못했습니다. 다시 시도해 주세요.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('저장하는 중입니다…')).toBeNull());
+    expect((await getBook(inner, 'bk1'))!.chapters[0].title).toBe('Opening Night');
+    expect(first.value).toBe('Alpha');
+  });
+
   it('4.1-5 저장하는 동안 원래 제목으로 되돌려 다시 저장하면 원래 제목이 남는다', async () => {
     const inner = createMemoryArea();
     await seed(inner);
