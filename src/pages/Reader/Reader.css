@@ -1188,6 +1188,12 @@ body {
   flex-wrap: wrap;
   gap: 6px;
 }
+.nfr-edit-move {
+  min-width: 36px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+}
 .nfr-edit-add {
   display: grid;
   gap: 12px;
@@ -1258,6 +1264,10 @@ body {
 }
 .nfr-chapter-edit .nfr-error {
   margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--nfr-danger-border);
+  border-radius: var(--nfr-radius-small);
+  background: var(--nfr-danger-bg);
 }
 .nfr-lost-list {
   display: grid;
@@ -1267,6 +1277,10 @@ body {
   padding: 0;
   overflow-y: auto;
   list-style: none;
+}
+.nfr-lost-list:focus-visible {
+  outline: 2px solid var(--nfr-primary);
+  outline-offset: 2px;
 }
 .nfr-lost-list li {
   display: grid;

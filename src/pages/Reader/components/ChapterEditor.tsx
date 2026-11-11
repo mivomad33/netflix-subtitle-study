@@ -57,12 +57,14 @@ export function replaceAll(text: string, needle: string, replacement: string, ca
 }
 
 // 입력칸에서 고른 곳이 보이게 스크롤한다. 크롬은 포커스를 다시 받을 때 고른 곳으로 스크롤한다.
+// 찾을 글 입력칸에서 Enter로 찾았으면 포커스를 그 입력칸에 돌려줘 Enter를 이어 누를 수 있게 하고,
+// 버튼으로 찾았으면 본문에 포커스를 둬 고른 곳이 또렷이 보이게 한다.
 function revealSelection(textarea: HTMLTextAreaElement, start: number, end: number) {
   const active = document.activeElement as HTMLElement | null;
   textarea.setSelectionRange(start, end);
   textarea.blur();
   textarea.focus();
-  if (active && active !== textarea && typeof active.focus === 'function') active.focus({ preventScroll: true });
+  if (active && active.tagName === 'INPUT' && typeof active.focus === 'function') active.focus({ preventScroll: true });
 }
 
 type Problem =
@@ -301,6 +303,8 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
   const handleSave = async () => {
     if (!original || busy) return;
     setProblem(null);
+    clearTimeout(summaryTimer.current);
+    refresh();
     const next = input();
     if (sameParagraphs(next.after, original)) {
       // 고친 것이 없으면 쓰지 않고 돌아간다(4.3-4).
@@ -486,7 +490,8 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
               못함"으로 남습니다. 메모 글은 지워지지 않습니다. 옮긴 글이라면 그 문단을 다른 장에 그대로 붙여 넣고 저장할 때 다시
               붙습니다.
             </p>
-            <ul className="nfr-lost-list" aria-label="붙일 수 없는 메모">
+            {/* 목록이 길면 대화상자 안에서 스크롤한다. 키보드로도 스크롤할 수 있게 포커스를 받는다. */}
+            <ul className="nfr-lost-list" aria-label="붙일 수 없는 메모" tabIndex={0}>
               {lost.map((memo: Memo) => (
                 <li key={memo.id}>
                   <span className="nfr-lost-quote">{memo.quote}</span>

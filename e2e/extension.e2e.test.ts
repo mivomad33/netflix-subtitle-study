@@ -18,6 +18,8 @@ const SHOTS = resolve(
   '../docs/specs/20261108-0925-firebase-sync/screens'
 );
 
+const EDIT_SHOTS = resolve(__dirname, '../docs/specs/20261111-1712-book-edit/shots');
+
 type Playwright = typeof import('playwright');
 let playwright: Playwright;
 
@@ -50,6 +52,7 @@ beforeAll(async () => {
     join(homedir(), '.cache/design-tools/node_modules/playwright/index.mjs');
   playwright = (await import(module)) as Playwright;
   mkdirSync(SHOTS, { recursive: true });
+  mkdirSync(EDIT_SHOTS, { recursive: true });
 });
 
 describe('the real build before sign-in', () => {
@@ -195,6 +198,84 @@ describe('the emulator build', () => {
       await ext.close();
     }
   });
+
+  // 원서 고치기(명세서 book-edit, 완료 정의): 책을 등록하고, 하이라이트가 있는 문단의 오타를 고쳐 저장한다.
+  it('book-edit keeps a highlight on the fixed text after a typo is corrected in the chapter editor', async () => {
+    const ext = await launch(resolve(__dirname, '../build-e2e'));
+    try {
+      const page = await signIn(ext, 'e2e-edit', 'edit@example.test');
+      // 직접 쓴 예시 글.
+      const paragraphs = [
+        'The lamp glowed over a quiet desk.',
+        'A cat slept beside teh warm window.',
+        'Rain tapped softly on the roof.',
+      ];
+      await page.getByRole('button', { name: '책 등록' }).click();
+      await page.getByLabel('책 제목 (필수)').fill('Lamp Stories');
+      await page.getByLabel(/본문 \(필수\)/).fill(paragraphs.join('\n\n'));
+      await page.getByRole('button', { name: '저장' }).click();
+      // 저장이 끝나면 리더(#/book/<id>)로 간다.
+      await page.waitForFunction(() => window.location.hash.startsWith('#/book/'), null, { timeout: 20000 });
+      await page.locator('.nfr-paragraph').first().waitFor({ timeout: 20000 });
+      const bookId = decodeURIComponent(new URL(page.url()).hash.split('/')[2].split('?')[0]);
+
+      const start = paragraphs[1].indexOf('teh warm');
+      await ext.worker.evaluate(
+        ([id, text, at]) =>
+          (globalThis as any).nfStudyE2E.write({
+            'memo:e2e-edit-m1': {
+              id: 'e2e-edit-m1',
+              kind: 'book',
+              sourceId: id,
+              contextText: text,
+              start: at,
+              end: (at as number) + 8,
+              quote: 'teh warm',
+              note: 'typo here',
+              createdAt: 1,
+              updatedAt: 1,
+              chapterId: 'ch1',
+              paragraphIndex: 1,
+            },
+          }),
+        [bookId, paragraphs[1], start] as const
+      );
+      const mark = page.locator('mark[data-memo-id="e2e-edit-m1"]');
+      await mark.waitFor({ timeout: 15000 });
+      expect(await mark.textContent()).toContain('teh warm');
+
+      await page.getByRole('button', { name: '이 장 고치기' }).click();
+      const body = page.getByLabel('장 본문');
+      await body.waitFor({ timeout: 15000 });
+      expect(await body.inputValue()).toBe(paragraphs.join('\n\n'));
+      await body.fill(paragraphs.join('\n\n').replace('teh warm', 'the warm'));
+      await page.getByText('문단 3→3 · 글자 0').waitFor();
+      await page.screenshot({ path: join(EDIT_SHOTS, 'e2e-chapter-editor-1280.png') });
+      await page.getByRole('button', { name: '저장', exact: true }).click();
+
+      // 확인 창 없이 저장되고, 리더로 돌아와 하이라이트가 고친 글에 그려진다.
+      await page.getByText('A cat slept beside the warm window.').waitFor({ timeout: 20000 });
+      await page.waitForFunction(
+        () => document.querySelector('mark[data-memo-id="e2e-edit-m1"]')?.textContent?.includes('the warm'),
+        null,
+        { timeout: 15000 }
+      );
+      expect(await page.getByText('위치를 찾지 못함').count()).toBe(0);
+      await page.screenshot({ path: join(EDIT_SHOTS, 'e2e-reader-after-edit-1280.png') });
+
+      // 새로 연 화면(다른 탭)에서도 고친 본문과 하이라이트가 보인다.
+      const second = await ext.context.newPage();
+      await second.goto(`${READER}#/book/${encodeURIComponent(bookId)}`);
+      await second.getByText('A cat slept beside the warm window.').waitFor({ timeout: 20000 });
+      await second.waitForFunction(
+        () => document.querySelector('mark[data-memo-id="e2e-edit-m1"]')?.textContent?.includes('the warm'),
+        null,
+        { timeout: 15000 }
+      );
+    } finally {
+      await ext.close();
+    }
+  }, 120000);
 
   it('4.2-3 the Netflix bridge gets a change from another client within 10 seconds after the service worker stopped', async () => {
     const ext = await launch(resolve(__dirname, '../build-e2e'));

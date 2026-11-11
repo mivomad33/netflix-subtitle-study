@@ -335,7 +335,7 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
             <span className="nfr-edit-actions">
               <button
                 type="button"
-                className="nfr-btn nfr-icon-btn"
+                className="nfr-btn nfr-edit-move"
                 aria-label={`「${chapter.title}」 위로`}
                 title="위로"
                 disabled={busy || index === 0}
@@ -345,7 +345,7 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
               </button>
               <button
                 type="button"
-                className="nfr-btn nfr-icon-btn"
+                className="nfr-btn nfr-edit-move"
                 aria-label={`「${chapter.title}」 아래로`}
                 title="아래로"
                 disabled={busy || index === book.chapters.length - 1}
