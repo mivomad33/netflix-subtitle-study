@@ -58,6 +58,16 @@ const App: React.FC = () => {
     setPendingLeave(next);
     return true;
   });
+  // 탭을 닫거나 새로 고칠 때는 브라우저가 묻게 한다.
+  useEffect(() => {
+    const handle = (event: BeforeUnloadEvent) => {
+      if (!dirty.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handle);
+    return () => window.removeEventListener('beforeunload', handle);
+  }, []);
   const leaveGuard = useMemo(
     () => ({
       setDirty(value: boolean) {

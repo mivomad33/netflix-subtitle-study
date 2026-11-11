@@ -1,12 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookMeta, Memo } from '../../../shared/memo/types';
 import { charCount, getBook, getChapterParagraphs, getPosition } from '../../../shared/storage/repo';
 import { editorOffsetOfParagraph, editorText, parseEditorText, sameParagraphs } from '../../../shared/text/chapterEdit';
 import { useReaderEnv } from '../env';
 import { useLeaveGuard } from '../leaveGuard';
-import { ChapterSavePlan, isBookEditError, planChapterSave, saveChapterBody } from '../logic/bookEdit';
+import { ChapterSavePlan, isBookEditError, saveChapterBody, tooLongMessage } from '../logic/bookEdit';
 import { Route } from '../route';
-import { tooLongMessage } from './BookEditor';
 import { ConfirmDialog } from './ConfirmDialog';
 
 const SUMMARY_DELAY = 200;
@@ -68,8 +67,7 @@ function revealSelection(textarea: HTMLTextAreaElement, start: number, end: numb
 }
 
 type Problem =
-  | { kind: 'changed' } // 편집을 시작한 뒤 다른 곳에서 본문이 바뀜
-  | { kind: 'gone' } // 장이나 책이 지워짐
+  | { kind: 'changed' } // 편집을 시작한 뒤 다른 곳에서 본문이 바뀜(다시 여는 버튼이 붙는다)
   | { kind: 'message'; text: string };
 
 interface Loaded {
@@ -101,7 +99,8 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
   const [busy, setBusy] = useState(false);
   const [showBusy, setShowBusy] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
-  const [confirm, setConfirm] = useState<{ plan: ChapterSavePlan; shrink: boolean } | null>(null);
+  // 저장 전에 확인받을 계획(붙일 수 없는 메모가 있거나 글이 크게 준다).
+  const [confirm, setConfirm] = useState<ChapterSavePlan | null>(null);
   const [reopen, setReopen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dirtyRef = useRef(false);
@@ -149,20 +148,14 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
     };
   }, [area, bookId, chapterId, version]);
 
-  // 탭을 닫거나 새로 고칠 때 저장하지 않은 수정이 있으면 브라우저가 묻게 한다(4.3-11).
-  useEffect(() => {
-    const handle = (event: BeforeUnloadEvent) => {
-      if (!dirtyRef.current) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handle);
-    return () => {
-      window.removeEventListener('beforeunload', handle);
+  // 화면을 떠나면 나가기 확인을 푼다(4.3-11의 확인과 탭 닫기 경고는 앱이 맡는다).
+  useEffect(
+    () => () => {
       clearTimeout(summaryTimer.current);
       guard.setDirty(false);
-    };
-  }, [guard]);
+    },
+    [guard]
+  );
 
   // 오래 걸릴 때만 대기 표시를 보인다.
   useEffect(() => {
@@ -175,6 +168,8 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
   }, [busy]);
 
   const original = loaded && loaded !== 'missing' ? loaded.original : null;
+  // 입력칸의 처음 값. 렌더마다 본문 전체를 다시 잇지 않는다.
+  const initialText = useMemo(() => (original ? editorText(original) : ''), [original]);
 
   const refresh = useCallback(() => {
     const textarea = textareaRef.current;
@@ -265,7 +260,9 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
   const fail = (e: unknown) => {
     if (isBookEditError(e)) {
       if (e.code === 'chapter-changed') setProblem({ kind: 'changed' });
-      else if (e.code === 'chapter-missing' || e.code === 'book-missing') setProblem({ kind: 'gone' });
+      else if (e.code === 'chapter-missing' || e.code === 'book-missing') {
+        setProblem({ kind: 'message', text: '이 장이나 책이 다른 곳에서 지워져 저장하지 않았습니다. 고친 글은 위에 남아 있습니다.' });
+      }
       else if (e.code === 'too-long') setProblem({ kind: 'message', text: tooLongMessage(e.detail.chars) });
       else setProblem({ kind: 'message', text: '저장하지 못했습니다. 다시 시도해 주세요.' });
       return;
@@ -313,18 +310,15 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
     }
     setBusy(true);
     try {
-      const plan = await planChapterSave(area, next);
-      if (plan.unchanged) {
-        leaveSaved();
-        return;
-      }
-      const shrink = shrinksTooMuch(plan.beforeChars, plan.afterChars);
-      if (plan.lost.length > 0 || shrink) {
-        setConfirm({ plan, shrink });
-        return;
-      }
-      await saveChapterBody(area, next);
-      leaveSaved();
+      // 붙일 수 없는 메모가 있거나 글이 크게 줄면 쓰지 않고 계획만 받아 확인 창을 띄운다.
+      const result = await saveChapterBody(
+        area,
+        next,
+        Date.now(),
+        (plan) => plan.lost.length === 0 && !shrinksTooMuch(plan.beforeChars, plan.afterChars)
+      );
+      if (result.saved) leaveSaved();
+      else setConfirm(result);
     } catch (e) {
       fail(e);
     } finally {
@@ -356,9 +350,10 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
   }
 
   const chapter = loaded.book.chapters.find((c) => c.id === chapterId);
-  const lost = confirm?.plan.lost ?? [];
-  const shrinkBy = confirm ? confirm.plan.beforeChars - confirm.plan.afterChars : 0;
-  const shrinkPercent = confirm && confirm.plan.beforeChars > 0 ? Math.round((shrinkBy / confirm.plan.beforeChars) * 100) : 0;
+  const lost = confirm?.lost ?? [];
+  const shrink = !!confirm && shrinksTooMuch(confirm.beforeChars, confirm.afterChars);
+  const shrinkBy = confirm ? confirm.beforeChars - confirm.afterChars : 0;
+  const shrinkPercent = confirm && confirm.beforeChars > 0 ? Math.round((shrinkBy / confirm.beforeChars) * 100) : 0;
 
   return (
     <section className="nfr-chapter-edit" aria-labelledby="chapter-edit-title">
@@ -418,7 +413,7 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
         ref={textareaRef}
         className="nfr-input nfr-chapter-body"
         aria-label="장 본문"
-        defaultValue={editorText(loaded.original)}
+        defaultValue={initialText}
         onInput={handleInput}
       />
 
@@ -432,11 +427,6 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
             새 본문으로 다시 열기
           </button>
         </div>
-      )}
-      {problem?.kind === 'gone' && (
-        <p className="nfr-error" role="alert">
-          이 장이나 책이 다른 곳에서 지워져 저장하지 않았습니다. 고친 글은 위에 남아 있습니다.
-        </p>
       )}
       {problem?.kind === 'message' && (
         <p className="nfr-error" role="alert">
@@ -478,7 +468,7 @@ export const ChapterEditor: React.FC<Props> = ({ bookId, chapterId, from, naviga
           </>
         }
       >
-        {confirm?.shrink && (
+        {shrink && (
           <p>
             글자가 {shrinkBy.toLocaleString('ko-KR')}자({shrinkPercent}%) 줄어듭니다. 저장할까요?
           </p>

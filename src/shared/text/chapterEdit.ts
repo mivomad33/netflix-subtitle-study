@@ -2,7 +2,7 @@
 // 고치기 전후 본문을 비교해 메모와 읽던 위치를 새 본문에 맞게 옮긴다(명세서 book-edit 4.3-3, 4.4, 4.5, 4.6).
 import diff from 'fast-diff';
 import { Memo } from '../memo/types';
-import { trimRange } from '../memo/annotate';
+import { memoMatchesText, trimRange } from '../memo/annotate';
 
 // ---- 편집 창의 글 ↔ 문단 ----
 
@@ -47,7 +47,6 @@ const MAX_CODES = 0xd800 - 1 + (0xffff - 0xdfff);
 
 class Encoder {
   private codes = new Map<string, string>();
-  full = false;
 
   encode(items: string[]): string | null {
     let out = '';
@@ -55,10 +54,7 @@ class Encoder {
       let ch = this.codes.get(item);
       if (ch === undefined) {
         const n = this.codes.size + 1;
-        if (n > MAX_CODES) {
-          this.full = true;
-          return null;
-        }
+        if (n > MAX_CODES) return null;
         ch = String.fromCharCode(n < 0xd800 ? n : n + 0x800);
         this.codes.set(item, ch);
       }
@@ -249,6 +245,9 @@ export function diffParagraphs(before: string[], after: string[]): Hunk[] {
   return hunks;
 }
 
+// 고친 곳 때문에 그 뒤의 글이 밀리는 글자 수.
+const growth = (h: Hunk) => h.d - h.c - (h.b - h.a);
+
 // 고친 곳의 앞뒤에서 글자가 같은 부분을 뺀다. 낱말 가운데에서 끝나는 하이라이트를 다시 볼 때 쓴다.
 function trimHunk(h: Hunk, oldText: string, newText: string): Hunk | null {
   let { a, b, c, d } = h;
@@ -269,12 +268,12 @@ function mapRange(s: number, e: number, hunks: Hunk[], oldText: string, newText:
   let inside = 0;
   const visit = (h: Hunk, canTrim: boolean): boolean => {
     if (h.b <= s) {
-      before += h.d - h.c - (h.b - h.a);
+      before += growth(h);
       return true;
     }
     if (h.a >= e) return true;
     if (h.a >= s && h.b <= e) {
-      inside += h.d - h.c - (h.b - h.a);
+      inside += growth(h);
       return true;
     }
     if (!canTrim) return false;
@@ -362,21 +361,14 @@ export function remapChapter(before: string[], after: string[], memos: Memo[], n
     else moved.push(placed);
   };
 
-  const pending: Memo[] = [];
+  // 문단을 옮기면서 그 사이의 문단도 고치면 문단 단위 맞춤이 어긋날 수 있다.
+  // 그렇게 붙이지 못한 메모가 있을 때만 본문 전체를 낱말 단위로 다시 비교해 본다.
+  let whole: Hunk[] | undefined;
   memos.forEach((memo) => {
-    const placed = place(memo, hunks);
+    const placed = place(memo, hunks) ?? place(memo, (whole ??= tokenHunks(oldText, newText, 0, 0)));
     if (placed) settle(memo, placed);
-    else pending.push(memo);
+    else lost.push(memo);
   });
-  if (pending.length > 0) {
-    // 문단을 옮기면서 그 사이의 문단도 고치면 문단 단위 맞춤이 어긋날 수 있다. 본문 전체를 낱말 단위로 다시 비교해 본다.
-    const whole = tokenHunks(oldText, newText, 0, 0);
-    pending.forEach((memo) => {
-      const placed = place(memo, whole);
-      if (placed) settle(memo, placed);
-      else lost.push(memo);
-    });
-  }
 
   const mapParagraph = (index: number): number => {
     if (after.length === 0) return 0;
@@ -389,7 +381,7 @@ export function remapChapter(before: string[], after: string[], memos: Memo[], n
     let delta = 0;
     for (const h of hunks) {
       if (h.b <= x) {
-        delta += h.d - h.c - (h.b - h.a);
+        delta += growth(h);
         continue;
       }
       if (h.a > x) break;
@@ -399,7 +391,7 @@ export function remapChapter(before: string[], after: string[], memos: Memo[], n
         return h.c === 0 ? 0 : clamp(paragraphAt(h.c - 1, newStarts));
       }
       x = h.b;
-      delta += h.d - h.c - (h.b - h.a);
+      delta += growth(h);
     }
     return clamp(paragraphAt(x + delta, newStarts));
   };
@@ -417,7 +409,7 @@ export function reattachByParagraph(detached: Memo[], chapterId: string, paragra
   detached.forEach((memo) => {
     const index = where.get(memo.contextText);
     if (index === undefined || index < 0) return;
-    if (memo.contextText.slice(memo.start, memo.end) !== memo.quote) return;
+    if (!memoMatchesText(memo, memo.contextText)) return;
     result.push({ ...memo, chapterId, paragraphIndex: index, updatedAt: now });
   });
   return result;

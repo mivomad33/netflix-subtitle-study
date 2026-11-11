@@ -11,7 +11,6 @@ import {
 import { useReaderEnv } from '../env';
 import { Route } from '../route';
 
-export { MAX_BOOK_CHARS };
 
 interface Preview {
   paragraphs: string[];

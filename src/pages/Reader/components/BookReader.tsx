@@ -230,7 +230,12 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
             return;
           }
           setBook(fresh);
-          setCharCounts(Object.fromEntries(fresh.chapters.map((c) => [c.id, c.charCount ?? 0])));
+          // 글자 수가 없는 예전 책은 본문으로 구한다(처음 열 때와 같다).
+          getBookCharCounts(area, [fresh])
+            .then((counts) => {
+              if (!cancelled) setCharCounts(counts.get(fresh.id) ?? {});
+            })
+            .catch((e) => console.error('[NF-STUDY] Failed to count characters:', e));
           const current = chapterIdRef.current;
           if (!current) return;
           if (!fresh.chapters.some((c) => c.id === current)) {
@@ -319,6 +324,13 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paragraphs]);
 
+  // 화면 맨 위(머리글 아래)에 걸친 첫 문단의 번호. 없으면 null.
+  const topVisibleParagraph = (): number | null => {
+    const elements = articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph-index]');
+    const visible = elements && Array.from(elements).find((el) => el.getBoundingClientRect().bottom > HEADER_OFFSET);
+    return visible ? Number(visible.dataset.paragraphIndex) : null;
+  };
+
   const savePosition = useCallback(
     (chapter: string, index: number) => {
       const position: ReadingPosition = { bookId, chapterId: chapter, paragraphIndex: index, updatedAt: Date.now() };
@@ -335,10 +347,8 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
     const handleScroll = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        const elements = articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph-index]');
-        if (!elements) return;
-        const visible = Array.from(elements).find((el) => el.getBoundingClientRect().bottom > HEADER_OFFSET);
-        if (visible) savePosition(chapterId, Number(visible.dataset.paragraphIndex));
+        const index = topVisibleParagraph();
+        if (index !== null) savePosition(chapterId, index);
       }, POSITION_SAVE_DELAY);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -351,10 +361,8 @@ export const BookReader: React.FC<Props> = ({ bookId, initialChapterId, initialM
   // 지금 보는 문단을 읽던 위치로 저장하고 이 장의 본문 편집 창을 연다(book-edit 4.3-1, 4.3-2).
   const editChapter = async () => {
     if (!chapterId) return;
-    const elements = articleRef.current?.querySelectorAll<HTMLElement>('[data-paragraph-index]');
-    const visible = elements && Array.from(elements).find((el) => el.getBoundingClientRect().bottom > HEADER_OFFSET);
     const kept = positionRef.current && positionRef.current.chapterId === chapterId ? positionRef.current.index : 0;
-    const index = visible ? Number(visible.dataset.paragraphIndex) : kept;
+    const index = topVisibleParagraph() ?? kept;
     try {
       await setPosition(area, { bookId, chapterId, paragraphIndex: index, updatedAt: Date.now() });
     } catch (e) {

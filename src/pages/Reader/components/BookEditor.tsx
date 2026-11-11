@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BookMeta, Memo } from '../../../shared/memo/types';
 import { PREFIX, KEY } from '../../../shared/storage/keys';
 import { getBook, listMemosBySource } from '../../../shared/storage/repo';
-import { MAX_BOOK_CHARS, toParagraphs } from '../../../shared/text/bookText';
+import { toParagraphs } from '../../../shared/text/bookText';
 import { useReaderEnv } from '../env';
 import { useLeaveGuard } from '../leaveGuard';
 import {
@@ -14,6 +14,7 @@ import {
   memosOfChapter,
   moveChapter,
   renameChapter,
+  tooLongMessage,
   updateBookInfo,
 } from '../logic/bookEdit';
 import { touches } from '../logic/liveMemos';
@@ -24,11 +25,6 @@ const TITLE_ERROR = `제목을 넣으세요(${MAX_TITLE_CHARS}자까지).`;
 const AUTHOR_ERROR = `지은이는 ${MAX_TITLE_CHARS}자까지 넣을 수 있습니다.`;
 const CHANGED_NOTICE = '다른 곳에서 책이 바뀌어 다시 읽었습니다. 다시 해 주세요.';
 const SAVE_FAILED = '저장하지 못했습니다. 다시 시도해 주세요.';
-
-export const tooLongMessage = (chars?: number) =>
-  `책 본문이 너무 깁니다. 한 권에 ${MAX_BOOK_CHARS.toLocaleString('ko-KR')}자까지 넣을 수 있습니다${
-    chars ? `(저장하면 ${chars.toLocaleString('ko-KR')}자)` : ''
-  }.`;
 
 // 입력을 마치면(포커스를 옮기거나 Enter) 한 번 저장하는 제목 입력칸. 글자마다 저장하지 않는다(4.1-5).
 const TitleField: React.FC<{
@@ -133,8 +129,8 @@ export const BookEditor: React.FC<{ bookId: string; navigate: (route: Route) => 
       .then((loaded) => {
         if (!cancelled) show(loaded);
       })
-      .catch((e) => {
-        console.error('[NF-STUDY] Failed to load book for editing:', isBookEditError(e) ? e.code : 'storage');
+      .catch(() => {
+        console.error('[NF-STUDY] Failed to load book for editing');
         if (!cancelled) setError('책을 불러오지 못했습니다. 화면을 새로 고쳐 주세요.');
       });
     // 다른 탭·기기에서 이 책이나 메모가 바뀌면 다시 읽는다(4.1-6).

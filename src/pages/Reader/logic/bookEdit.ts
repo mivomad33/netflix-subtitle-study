@@ -40,6 +40,12 @@ export class BookEditError extends Error {
 
 export const isBookEditError = (e: unknown): e is BookEditError => e instanceof BookEditError;
 
+// 책 본문 상한에 걸렸을 때의 안내. chars는 저장하려던 책 전체 글자 수다.
+export const tooLongMessage = (chars?: number) =>
+  `책 본문이 너무 깁니다. 한 권에 ${MAX_BOOK_CHARS.toLocaleString('ko-KR')}자까지 넣을 수 있습니다${
+    chars ? `(저장하면 ${chars.toLocaleString('ko-KR')}자)` : ''
+  }.`;
+
 // 제목류 입력을 정리한다. 비거나 너무 길면 null.
 export function cleanTitle(value: string, allowEmpty = false): string | null {
   const text = value.trim();
@@ -136,14 +142,9 @@ async function reattach(
   const candidates = memos.filter((m) => !handled.has(m.id) && texts.has(m.contextText));
   if (candidates.length === 0) return [];
   const existing = new Set(book.chapters.map((c) => c.id));
-  // 다른 장의 메모는 그 장에 지금 붙어 있으면 건드리지 않는다.
-  const elsewhere = Array.from(
-    new Set(
-      candidates
-        .map((m) => m.chapterId)
-        .filter((id): id is string => !!id && id !== chapterId && existing.has(id))
-    )
-  );
+  // 지금 있는 다른 장에 속한 메모인가. 그런 메모는 그 장에 붙어 있으면 건드리지 않는다.
+  const inOtherChapter = (m: Memo) => !!m.chapterId && m.chapterId !== chapterId && existing.has(m.chapterId);
+  const elsewhere = Array.from(new Set(candidates.filter(inOtherChapter).map((m) => m.chapterId!)));
   const bodies =
     elsewhere.length > 0
       ? await getChaptersParagraphs(
@@ -151,10 +152,9 @@ async function reattach(
           elsewhere.map((id) => ({ bookId: book.id, chapterId: id }))
         )
       : {};
-  const detached = candidates.filter((m) => {
-    if (!m.chapterId || m.chapterId === chapterId || !existing.has(m.chapterId)) return true;
-    return !isBookMemoAnchored(m, bodies[KEY.chapter(book.id, m.chapterId)]);
-  });
+  const detached = candidates.filter(
+    (m) => !inOtherChapter(m) || !isBookMemoAnchored(m, bodies[KEY.chapter(book.id, m.chapterId!)])
+  );
   return reattachByParagraph(detached, chapterId, paragraphs, now);
 }
 
@@ -183,7 +183,7 @@ export async function addChapter(
     id: chapterId,
     title,
     paragraphCount: input.paragraphs.length,
-    charCount: charCount(input.paragraphs),
+    charCount: added,
   };
   const book = touched({ ...fresh, chapters: [...fresh.chapters, chapter] }, now);
   const items: Record<string, unknown> = { [KEY.chapter(book.id, chapterId)]: input.paragraphs };
@@ -274,7 +274,8 @@ export async function planChapterSave(area: StorageArea, input: ChapterSaveInput
   const here = memosOfChapter(memos, input.bookId, input.chapterId).filter((m) => isBookMemoAnchored(m, stored));
   const remap = remapChapter(stored, input.after, here, now);
   // 이번에 떨어진 메모도 같은 글의 문단이 다른 자리에 있으면 거기에 붙는다(장 안에서 문단을 옮긴 경우).
-  const settled = new Set(here.filter((m) => !remap.lost.includes(m)).map((m) => m.id));
+  const lostIds = new Set(remap.lost.map((m) => m.id));
+  const settled = new Set(here.filter((m) => !lostIds.has(m.id)).map((m) => m.id));
   const attached = await reattach(area, book, input.chapterId, input.after, memos, settled, now);
   const attachedIds = new Set(attached.map((m) => m.id));
 
@@ -294,10 +295,17 @@ export async function planChapterSave(area: StorageArea, input: ChapterSaveInput
   };
 }
 
-// 본문과 그에 따라 바뀌는 책 정보·메모·읽던 위치를 한 번에 쓴다(4.3-9). 쓰기 직전에 다시 계산한다.
-export async function saveChapterBody(area: StorageArea, input: ChapterSaveInput, now = Date.now()): Promise<ChapterSavePlan> {
+// 본문과 그에 따라 바뀌는 책 정보·메모·읽던 위치를 한 번에 쓴다(4.3-9). 쓰기 직전에 계산한다.
+// confirm이 거짓을 돌려주면 쓰지 않고 계획만 돌려준다(saved: false). 화면이 사용자에게 확인받은 뒤 다시 부른다.
+export async function saveChapterBody(
+  area: StorageArea,
+  input: ChapterSaveInput,
+  now = Date.now(),
+  confirm?: (plan: ChapterSavePlan) => boolean
+): Promise<ChapterSavePlan & { saved: boolean }> {
   const plan = await planChapterSave(area, input, now);
-  if (plan.unchanged) return plan;
+  if (plan.unchanged) return { ...plan, saved: true };
+  if (confirm && !confirm(plan)) return { ...plan, saved: false };
   const book = touched(
     {
       ...plan.book,
@@ -307,14 +315,11 @@ export async function saveChapterBody(area: StorageArea, input: ChapterSaveInput
     },
     now
   );
-  const items: Record<string, unknown> = {
-    [KEY.chapter(input.bookId, input.chapterId)]: input.after,
-    [KEY.book(book.id)]: book,
-  };
+  const items: Record<string, unknown> = { [KEY.chapter(input.bookId, input.chapterId)]: input.after };
   plan.changed.forEach((m) => {
     items[KEY.memo(m.id)] = m;
   });
   if (plan.position) items[KEY.position(input.bookId)] = plan.position;
-  await area.set(items);
-  return { ...plan, book };
+  await writeBook(area, book, items);
+  return { ...plan, book, saved: true };
 }

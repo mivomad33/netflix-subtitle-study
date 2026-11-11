@@ -106,8 +106,10 @@ export const currentSet = (entry: ChapterIndexEntry | undefined): ChunkSet | nul
   isChunkSet(entry) ? { n: entry.n, v: entry.v, bytes: entry.bytes ?? 0, ...(entry.l === 2 ? { l: 2 as const } : {}) } : null;
 
 // 지워야 할 조각 묶음.
-export const pendingSets = (entry: ChapterIndexEntry | undefined): ChunkSet[] =>
-  (Array.isArray(entry?.p) ? (entry?.p ?? []) : []).filter(isChunkSet);
+export const pendingSets = (entry: ChapterIndexEntry | undefined): ChunkSet[] => {
+  const p = entry?.p;
+  return Array.isArray(p) ? p.filter(isChunkSet) : [];
+};
 
 // 그 장의 조각 문서가 있는 모든 묶음(지금 판 + 지워야 할 것).
 export const chunkSets = (entry: ChapterIndexEntry | undefined): ChunkSet[] => {
